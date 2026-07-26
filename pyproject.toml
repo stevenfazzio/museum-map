@@ -1,0 +1,28 @@
+[project]
+name = "museum-map-probe"
+version = "0.1.0"
+description = "Does country/type dominate the embedding space of museum Wikipedia leads?"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "requests>=2.32",
+    # numba (via umap-learn) caps numpy; pin explicitly so the resolver does not
+    # backtrack to a decade-old numba that cannot build on modern Python.
+    "numpy>=1.26,<2.3",
+    "pandas>=2.2",
+    "pyarrow>=16",
+    "scikit-learn>=1.5",
+    "umap-learn>=0.5.6",
+    "sentence-transformers>=3.0",
+    "torch>=2.3",
+    "plotly>=5.22",
+    "matplotlib>=3.8",
+    "tqdm>=4.66",
+    "spacy>=3.8,<3.9",
+    "xx-ent-wiki-sm @ https://github.com/explosion/spacy-models/releases/download/xx_ent_wiki_sm-3.8.0/xx_ent_wiki_sm-3.8.0-py3-none-any.whl",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.uv]
+package = false

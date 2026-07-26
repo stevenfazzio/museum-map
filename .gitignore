@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+# Regenerable and expensive-to-ship: HTTP cache, embeddings, intermediate frames.
+# Everything here is rebuilt by ./run_all.sh.
+data/
+# reports/figs IS tracked — report.md links to it, and it is 3.9 MB of small PNGs.
+.DS_Store
