@@ -205,6 +205,85 @@ not islands.
 
 ![centered, by language](figs/centered_language_facets.png)
 
+## Geography: the continuous version of the question
+
+Country ARI came out near zero, which reads as "geography is not in the
+embedding". That was the wrong instrument rather than the right answer — ARI
+compares *partitions*, and geography is a gradient. Measured continuously against
+the 1,632 museums that carry `P625` coordinates
+(81.6% of the sample), it is emphatically present.
+
+Correlation between log great-circle distance and embedding similarity (negative
+= farther apart means less alike): raw **r = -0.151**
+(z = -14 against a shuffled-coordinate null), language-centred
+**r = -0.116** (z = -84).
+
+### The decay is local, and it stops
+
+| distance (km) | pairs | similarity above global mean | same-country only | pairs |
+|---|---|---|---|---|
+| 0–1 | 227 | **+0.208** | +0.211 | 195 |
+| 1–3 | 270 | **+0.166** | +0.167 | 243 |
+| 3–10 | 367 | **+0.146** | +0.151 | 343 |
+| 10–32 | 517 | **+0.108** | +0.113 | 444 |
+| 32–100 | 2,029 | **+0.078** | +0.089 | 1,249 |
+| 100–316 | 12,289 | **+0.048** | +0.077 | 3,337 |
+| 316–1,000 | 80,344 | **+0.018** | +0.066 | 3,120 |
+| 1,000–3,162 | 277,866 | **+0.006** | +0.067 | 1,110 |
+| 3,162–10,000 | 650,644 | **-0.005** | +0.058 | 227 |
+| 10,000–20,100 | 306,343 | **-0.003** | — | 17 |
+
+![distance decay](figs/distance_decay.png)
+
+Two separable effects fall out of that table, and they are not the same thing:
+
+1. **A steep local effect that dies by ~1,000 km.** Museums within a kilometre of
+   each other sit **+0.208**
+   above the global mean; by 316–1,000 km it is down to
+   +0.018, and beyond
+   ~3,000 km it is at the permutation null. This is not a continental or
+   civilisational effect — it is *same-place-ness*. Museums in one city are
+   genuinely about overlapping subject matter.
+2. **A flat national effect that does not decay at all.** Same-country pairs stay
+   roughly constant above the mean whether they are 500 km or 5,000 km apart.
+   Country contributes an offset, not a gradient — which is exactly why a
+   partition metric like ARI could see so little while the continuous
+   relationship is this strong.
+
+### Local vs. universal: a candidate axis for the map
+
+Per museum, the median great-circle distance to its 10 nearest embedding
+neighbours. Small means its peers are down the road; large means its peers are
+everywhere. On the centred space the median museum sits at
+2,543 km against a
+6,589 km random-pair baseline
+(0.39x).
+
+![neighbourhood radius by type](figs/radius_by_type.png)
+
+The ordering is not something the method was told: most locally rooted are
+**local museum** (1,256 km), **open-air museum** (1,392 km), **archaeological museum** (1,539 km); most internationally legible are **military museum** (4,151 km), **railway museum** (3,374 km), **natural history museum** (3,244 km). Local-history and open-air
+museums are *about* their locality; wars, railways and natural history are
+globally shared subject matter. That the score recovers this unprompted is decent
+evidence it measures something real, and it is a better organising principle for
+a map than anything erasing geography would produce.
+
+**Why geography is not centred out the way language was.** Language entered
+through the sampling rule — "longest article across languages" — so it is a fact
+about Wikipedia's editorial communities, not about museums, and the parallel
+articles gave an oracle to confirm the removal took the artefact rather than the
+content. Location is constitutive: a local-history museum in Bavaria *is* about
+Bavaria. There is no "same museum, different place" to validate against, so a
+geographic residualisation could not be distinguished from having gutted the
+space — and every metric would move by construction. The local/universal score
+above uses the same information as a lens instead.
+
+**Caveat.** Stratifying by country left only
+3,120–3,337 same-country
+pairs in the mid-distance bins and very few past 3,000 km, so the flat national
+effect is measured on thin data at the long end. Reading it as "roughly constant"
+is safe; reading exact values per bin is not.
+
 ## How to read this
 
 `ARI` compares two *partitions*, so ~31 HDBSCAN clusters

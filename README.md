@@ -48,6 +48,32 @@ so what remains is gradients rather than islands.
 Do not restrict the corpus to English — it exists for only 48% of the sample and
 re-introduces the anglophone bias the stratification was built to remove.
 
+**Geography is present, but as a gradient, not a partition** — which is why the
+country ARI missed it. Measured continuously over the 81.6% of museums carrying
+coordinates, the relationship decomposes into two separable effects:
+
+- a **steep local effect that dies by ~1,000 km**: museums within 1 km of each
+  other sit +0.208 above the mean similarity, falling to +0.018 by 316–1,000 km
+  and reaching the permutation null past ~3,000 km. This is *same-place-ness*,
+  not continental culture.
+- a **flat national effect that never decays**: same-country pairs stay ~+0.06
+  above the mean whether they are 500 km or 5,000 km apart. Country is an offset,
+  not a gradient.
+
+That yields a **local↔universal axis** — the median distance to a museum's 10
+nearest embedding neighbours — which recovers an unprompted and sensible
+ordering: local (1,256 km), open-air (1,392) and archaeological (1,539) museums
+at one end; military (4,151), railway (3,374) and natural history (3,244) at the
+other. Local-history museums are *about* their locality; wars, trains and
+dinosaurs are globally shared subject matter.
+
+Geography is deliberately **not** centred out. Language was a corpus artefact of
+the "longest article" sampling rule, and parallel articles gave an oracle to
+confirm the removal took the artefact rather than the content. Location is
+constitutive of what a museum is, and there is no "same museum, different place"
+to validate against — so a geographic residualisation could not be distinguished
+from having gutted the space.
+
 ## Run
 
 ```bash
@@ -75,6 +101,7 @@ including UMAP.
 | `s07_embed` | multilingual encoder, 3 × 2,000 vectors | `data/processed/emb_*.npy` |
 | `s08_analyze` | UMAP + HDBSCAN + metrics | `data/processed/metrics_*.json` |
 | `s10_parallel` | cross-lingual retrieval on same-museum article pairs; raw vs centered vs INLP | `data/processed/parallel_*.json` |
+| `s11_geography` | distance-decay curve vs a permutation null; local↔universal radius per museum | `data/processed/geo_*.json`, `geo_scores_*.parquet` |
 | `s09_report` | figures + markdown (runs last) | `reports/` |
 
 ## Decisions worth knowing

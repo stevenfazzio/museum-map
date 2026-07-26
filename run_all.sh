@@ -17,7 +17,8 @@ run stages/s06_variants.py
 run stages/s07_embed.py   --model "$MODEL"
 run stages/s08_analyze.py --model "$MODEL"
 run stages/s08_analyze.py --model "$MODEL" --center
-run stages/s10_parallel.py --model "$MODEL"
+run stages/s10_parallel.py  --model "$MODEL"
+run stages/s11_geography.py --model "$MODEL"
 run stages/s09_report.py  --model "$MODEL"
 
 echo

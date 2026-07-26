@@ -147,6 +147,91 @@ def dissolve_figure(df: pd.DataFrame, out: Path, n_langs: int = 4) -> None:
     plt.close(fig)
 
 
+def _midpoints(edges: list[float]) -> np.ndarray:
+    e = np.asarray(edges, dtype=float)
+    mid = np.sqrt(np.maximum(e[:-1], 0.5) * e[1:])  # geometric, log axis
+    mid[0] = 0.5
+    return mid
+
+
+def decay_figure(G: dict, out: Path, min_pairs: int = 50) -> None:
+    """Similarity above each space's own global mean, against great-circle distance."""
+    mid = _midpoints(G["bin_edges_km"])
+    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.0), facecolor=SURFACE)
+
+    def series(ax, block, colour, label, band=True, ref=None):
+        y = np.array([np.nan if s is None else s for s in block["mean_similarity"]])
+        n = np.array(block["n_pairs"])
+        # Two series drawn on one axis must share a reference. Each *space* gets
+        # its own global mean (different similarity scales), but the same-country
+        # subset must be referenced to its space's all-pairs mean, or it looks
+        # like it dips below zero when it is in fact the higher curve.
+        gm = block["global_mean"] if ref is None else ref
+        ok = n >= min_pairs
+        ax.plot(mid[ok], (y - gm)[ok], color=colour, linewidth=2, label=label, zorder=3)
+        ax.scatter(mid[ok], (y - gm)[ok], s=18, color=colour, zorder=4)
+        if band and block.get("null_lo"):
+            lo = np.array([np.nan if s is None else s for s in block["null_lo"]]) - gm
+            hi = np.array([np.nan if s is None else s for s in block["null_hi"]]) - gm
+            ax.fill_between(mid[ok], lo[ok], hi[ok], color=GREY, alpha=0.7, linewidth=0, zorder=1)
+
+    ax = axes[0]
+    series(ax, G["spaces"]["raw"]["all_pairs"], SERIES[0], "raw")
+    series(ax, G["spaces"]["centered"]["all_pairs"], SERIES[1], "language-centered")
+    ax.set_title("All pairs — near museums are more alike", fontsize=10, color=INK)
+
+    ax = axes[1]
+    cen = G["spaces"]["centered"]
+    ref = cen["all_pairs"]["global_mean"]
+    series(ax, cen["all_pairs"], SERIES[1], "all pairs", ref=ref)
+    series(ax, cen["same_country"], SERIES[3], "same country only", band=False, ref=ref)
+    ax.set_title("Centered space — distance vs. national membership", fontsize=10, color=INK)
+
+    for ax in axes:
+        ax.set_xscale("log")
+        ax.axhline(0, color="#c9c8c3", linewidth=1, zorder=0)
+        ax.set_xlabel("great-circle distance (km)", fontsize=9, color=INK2)
+        ax.set_facecolor(SURFACE)
+        ax.tick_params(colors=INK2, labelsize=8)
+        for s in ("top", "right"):
+            ax.spines[s].set_visible(False)
+        for s in ("left", "bottom"):
+            ax.spines[s].set_color("#e6e5e1")
+        ax.legend(fontsize=8, frameon=False, labelcolor=INK2)
+    axes[0].set_ylabel("mean cosine similarity\nabove that space's global mean",
+                       fontsize=9, color=INK2)
+    fig.tight_layout(rect=(0, 0.05, 1, 1))
+    fig.text(0.5, 0.015, "Grey band = permutation null (coordinates shuffled)",
+             ha="center", fontsize=8.5, color=INK2)
+    fig.savefig(out, dpi=130, facecolor=SURFACE)
+    plt.close(fig)
+
+
+def radius_figure(by_type: dict, out: Path) -> None:
+    """Median distance to a museum's 10 nearest embedding neighbours, by type."""
+    items = sorted(by_type.items(), key=lambda kv: kv[1]["median_km"])
+    names = [f"{k}  (n={v['n']})" for k, v in items]
+    vals = [v["median_km"] for _, v in items]
+    fig, ax = plt.subplots(figsize=(7.6, 0.34 * len(items) + 1.4), facecolor=SURFACE)
+    ax.barh(range(len(items)), vals, color=ACCENT, height=0.62, linewidth=0)
+    ax.set_yticks(range(len(items)))
+    ax.set_yticklabels(names, fontsize=8.5, color=INK)
+    ax.invert_yaxis()
+    for i, val in enumerate(vals):
+        ax.text(val + 60, i, f"{val:,.0f}", va="center", fontsize=8, color=INK2)
+    ax.set_xlabel("median km to 10 nearest embedding neighbours  "
+                  "(← locally rooted · internationally legible →)",
+                  fontsize=9, color=INK2)
+    ax.set_facecolor(SURFACE)
+    ax.tick_params(colors=INK2, labelsize=8)
+    for s in ("top", "right", "left"):
+        ax.spines[s].set_visible(False)
+    ax.spines["bottom"].set_color("#e6e5e1")
+    fig.tight_layout()
+    fig.savefig(out, dpi=130, facecolor=SURFACE)
+    plt.close(fig)
+
+
 def fmt(x, spec="+.3f"):
     return "n/a" if x is None else format(x, spec)
 
@@ -193,6 +278,13 @@ def main() -> None:
                 facet_figure(cdf, col,
                              f"(a) full lead, per-language centered — by {nice}",
                              FIGS / f"centered_{fn}_facets.png")
+
+    G = None
+    gpath = PROCESSED / f"geo_{tag}.json"
+    if gpath.exists():
+        G = json.loads(gpath.read_text())
+        decay_figure(G, FIGS / "distance_decay.png")
+        radius_figure(G["radius_by_type"], FIGS / "radius_by_type.png")
 
     P = None
     ppath = PROCESSED / f"parallel_{tag}.json"
@@ -462,6 +554,102 @@ not islands.
 
 """
 
+    # ---- geography (stage 11) ----------------------------------------------
+    geo_md = ""
+    if G:
+        e = G["bin_edges_km"]
+        cen = G["spaces"]["centered"]
+        rows = []
+        for i in range(len(e) - 1):
+            n = cen["all_pairs"]["n_pairs"][i]
+            if n < 50:
+                continue
+            # Both columns are deviations from the *same* reference — the
+            # all-pairs global mean — so the two are directly comparable.
+            ref = cen["all_pairs"]["global_mean"]
+            a = cen["all_pairs"]["mean_similarity"][i] - ref
+            sc = cen["same_country"]["mean_similarity"][i]
+            nsc = cen["same_country"]["n_pairs"][i]
+            sc_s = f"{sc - ref:+.3f}" if sc is not None and nsc >= 30 else "—"
+            rows.append(f"| {e[i]:,.0f}–{e[i + 1]:,.0f} | {n:,} | **{a:+.3f}** | {sc_s} | {nsc:,} |")
+        rr, rc = G["spaces"]["raw"]["mantel"], G["spaces"]["centered"]["mantel"]
+        rad = G["radius"]
+        by_t = sorted(G["radius_by_type"].items(), key=lambda kv: kv[1]["median_km"])
+        local3 = ", ".join(f"**{k}** ({v['median_km']:,.0f} km)" for k, v in by_t[:3])
+        univ3 = ", ".join(f"**{k}** ({v['median_km']:,.0f} km)" for k, v in reversed(by_t[-3:]))
+
+        geo_md = f"""## Geography: the continuous version of the question
+
+Country ARI came out near zero, which reads as "geography is not in the
+embedding". That was the wrong instrument rather than the right answer — ARI
+compares *partitions*, and geography is a gradient. Measured continuously against
+the {G["n_museums"]:,} museums that carry `P625` coordinates
+({G["coord_coverage"]:.1%} of the sample), it is emphatically present.
+
+Correlation between log great-circle distance and embedding similarity (negative
+= farther apart means less alike): raw **r = {rr["r"]:+.3f}**
+(z = {rr["z"]:+.0f} against a shuffled-coordinate null), language-centred
+**r = {rc["r"]:+.3f}** (z = {rc["z"]:+.0f}).
+
+### The decay is local, and it stops
+
+| distance (km) | pairs | similarity above global mean | same-country only | pairs |
+|---|---|---|---|---|
+{chr(10).join(rows)}
+
+![distance decay](figs/distance_decay.png)
+
+Two separable effects fall out of that table, and they are not the same thing:
+
+1. **A steep local effect that dies by ~1,000 km.** Museums within a kilometre of
+   each other sit **{cen["all_pairs"]["mean_similarity"][0] - cen["all_pairs"]["global_mean"]:+.3f}**
+   above the global mean; by 316–1,000 km it is down to
+   {cen["all_pairs"]["mean_similarity"][6] - cen["all_pairs"]["global_mean"]:+.3f}, and beyond
+   ~3,000 km it is at the permutation null. This is not a continental or
+   civilisational effect — it is *same-place-ness*. Museums in one city are
+   genuinely about overlapping subject matter.
+2. **A flat national effect that does not decay at all.** Same-country pairs stay
+   roughly constant above the mean whether they are 500 km or 5,000 km apart.
+   Country contributes an offset, not a gradient — which is exactly why a
+   partition metric like ARI could see so little while the continuous
+   relationship is this strong.
+
+### Local vs. universal: a candidate axis for the map
+
+Per museum, the median great-circle distance to its 10 nearest embedding
+neighbours. Small means its peers are down the road; large means its peers are
+everywhere. On the centred space the median museum sits at
+{rad["centered"]["median"]:,.0f} km against a
+{G["random_pair_median_km"]:,.0f} km random-pair baseline
+({rad["centered"]["vs_random"]:.2f}x).
+
+![neighbourhood radius by type](figs/radius_by_type.png)
+
+The ordering is not something the method was told: most locally rooted are
+{local3}; most internationally legible are {univ3}. Local-history and open-air
+museums are *about* their locality; wars, railways and natural history are
+globally shared subject matter. That the score recovers this unprompted is decent
+evidence it measures something real, and it is a better organising principle for
+a map than anything erasing geography would produce.
+
+**Why geography is not centred out the way language was.** Language entered
+through the sampling rule — "longest article across languages" — so it is a fact
+about Wikipedia's editorial communities, not about museums, and the parallel
+articles gave an oracle to confirm the removal took the artefact rather than the
+content. Location is constitutive: a local-history museum in Bavaria *is* about
+Bavaria. There is no "same museum, different place" to validate against, so a
+geographic residualisation could not be distinguished from having gutted the
+space — and every metric would move by construction. The local/universal score
+above uses the same information as a lens instead.
+
+**Caveat.** Stratifying by country left only
+{cen["same_country"]["n_pairs"][6]:,}–{cen["same_country"]["n_pairs"][5]:,} same-country
+pairs in the mid-distance bins and very few past 3,000 km, so the flat national
+effect is measured on thin data at the long end. Reading it as "roughly constant"
+is safe; reading exact values per bin is not.
+
+"""
+
     # ---- language-removal section (stage 10) -------------------------------
     parallel_md = ""
     if P:
@@ -581,7 +769,7 @@ semantic map adds nothing over a choropleth with a type filter.
 `random_state=42` · **Clustering:** HDBSCAN (`min_cluster_size=15`,
 `min_samples=5`)
 
-{verdict}{parallel_md}{centered_md}## How to read this
+{verdict}{parallel_md}{centered_md}{geo_md}## How to read this
 
 `ARI` compares two *partitions*, so ~{A["n_clusters"]} HDBSCAN clusters
 against {A["n_countries"]} countries is penalised for cardinality
