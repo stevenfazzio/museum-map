@@ -9,70 +9,61 @@ Output: `reports/report.md` plus scatter figures in `reports/figs/`.
 
 ## Result
 
-**Neither.** Across 1,999 museums in 209 countries, HDBSCAN clusters match
-country at ARI **+0.076** and museum type at **−0.004**. The map is not a
-restatement of either.
+Tested with **two encoders** (`multilingual-e5-large` and `BAAI/bge-m3`), which
+turned out to matter more than anything else.
 
-But the axis that *does* dominate is an artefact of the corpus rather than a fact
-about museums: **the language the article is written in**, at ARI **+0.769** and
-70.8% 10-NN purity. Because the lead is taken from whichever Wikipedia had the
-longest article, the embedding space is first of all a map of Wikipedia language
-editions — and since language tracks country, part of the (secondary, real)
-country signal is language wearing a country label. Stripping location entities
-removes 36% of the country signal but only 2% of the language signal.
+### What replicates across both
 
-**The confound is removable, and cheaply.** 1,113 museums have articles in ≥2
-languages, which gives a ground truth that owes nothing to any clustering metric:
-the same institution described twice should retrieve itself across languages.
-Per-language centroid subtraction (leave-one-out, shrunk toward the global mean)
-takes that cross-lingual retrieval from P@1 **0.854 → 0.954**, cuts language
-neighbour purity **0.421 → 0.098** (chance 0.041), and *raises* country purity
-rather than destroying it. INLP suppresses language slightly harder but strips
-543 of 1024 dimensions and takes country down with it, for worse retrieval.
+- The map is **not** a restatement of country (ARI +0.076 / +0.016) or of museum
+  type (−0.004 / −0.003). Neither is the organising axis.
+- **Museum type is real, recoverable content.** The probe on specifically-typed
+  museums reaches 0.54–0.57 against a 0.266 baseline. The project has a subject.
+- **Geography is a gradient, not a partition** — which is why the country ARI
+  missed it. It decomposes into a steep local effect that dies by ~1,000 km
+  (+0.21 above mean similarity under 1 km, at the permutation null past
+  ~3,000 km) and a flat national offset that never decays. Mantel r −0.116 /
+  −0.119; the two encoders agree to within noise.
+- That yields a **local↔universal axis** — median distance to a museum's 10
+  nearest neighbours — which recovers the same unprompted ordering under both
+  encoders: local, ethnographic and archaeological museums at one end; military,
+  railway and natural-history at the other. Local-history museums are *about*
+  their locality; wars, trains and dinosaurs are globally shared subject matter.
 
-**And with language centred out, the project turns out to have a subject.**
-Re-running the full analysis on the centred map corpus:
+### What turned out to be an encoder artefact
 
-| label | ARI vs clusters | linear probe (baseline) |
+The first run, on e5-large alone, found article **language** dominating
+everything at ARI **+0.769** — an artefact of the "longest article across
+languages" sampling rule. That conclusion does not survive the second encoder:
+
+| | e5-large | BGE-M3 |
 |---|---|---|
-| language | +0.769 → **+0.007** | 0.567 → 0.137 *(0.175 — below baseline)* |
-| country | +0.076 → +0.006 | 0.150 → **0.178** *(0.022)* |
-| type, specifically-typed | −0.004 → **+0.049** | 0.274 → **0.542** *(0.266)* |
+| language ARI, raw | **+0.769** | **+0.017** |
+| language 10-NN purity, raw | 0.708 | 0.261 |
+| cross-lingual retrieval P@1, raw | 0.854 | **0.941** |
+| type-specific probe, raw | 0.274 | **0.513** |
 
-Language stops being linearly recoverable at all. Country survives and its probe
-*improves* — it was real, not purely a language proxy. And museum type roughly
-doubles from at-baseline to clearly predictable: it was in the embedding the
-whole time, drowned out. The honest caveat is that HDBSCAN noise rises 7% → 41%,
-so what remains is gradients rather than islands.
+**BGE-M3's space is already language-neutral** — it is trained for cross-lingual
+alignment, and it shows. Type is recoverable in its raw space without any
+correction at all, where e5 needed the language axis removed first to see it.
 
-Do not restrict the corpus to English — it exists for only 48% of the sample and
-re-introduces the anglophone bias the stratification was built to remove.
+**So: use BGE-M3.** Per-language centring (`probe/debias.py:centered`) still adds
+a little on top — cross-lingual P@1 0.941 → 0.966, language ARI +0.017 → −0.010 —
+but it is no longer load-bearing. Under e5 it was the difference between a map of
+Wikipedia language editions and a map of museums.
 
-**Geography is present, but as a gradient, not a partition** — which is why the
-country ARI missed it. Measured continuously over the 81.6% of museums carrying
-coordinates, the relationship decomposes into two separable effects:
+The centring transform is validated against ground truth rather than against a
+clustering metric: 1,113 museums have articles in ≥2 languages, and the same
+institution described twice should retrieve itself across languages. Judging a
+de-biasing transform by "did language ARI fall" is circular.
 
-- a **steep local effect that dies by ~1,000 km**: museums within 1 km of each
-  other sit +0.208 above the mean similarity, falling to +0.018 by 316–1,000 km
-  and reaching the permutation null past ~3,000 km. This is *same-place-ness*,
-  not continental culture.
-- a **flat national effect that never decays**: same-country pairs stay ~+0.06
-  above the mean whether they are 500 km or 5,000 km apart. Country is an offset,
-  not a gradient.
+Geography is deliberately **not** centred out. Language was a corpus artefact and
+parallel articles gave an oracle to confirm the removal took the artefact rather
+than the content. Location is constitutive of what a museum is, and there is no
+"same museum, different place" to validate against.
 
-That yields a **local↔universal axis** — the median distance to a museum's 10
-nearest embedding neighbours — which recovers an unprompted and sensible
-ordering: local (1,256 km), open-air (1,392) and archaeological (1,539) museums
-at one end; military (4,151), railway (3,374) and natural history (3,244) at the
-other. Local-history museums are *about* their locality; wars, trains and
-dinosaurs are globally shared subject matter.
-
-Geography is deliberately **not** centred out. Language was a corpus artefact of
-the "longest article" sampling rule, and parallel articles gave an oracle to
-confirm the removal took the artefact rather than the content. Location is
-constitutive of what a museum is, and there is no "same museum, different place"
-to validate against — so a geographic residualisation could not be distinguished
-from having gutted the space.
+Honest caveat on both encoders: post-centring HDBSCAN noise is ~40%, so the space
+is smooth rather than clumpy. That is a description, not a problem — see
+`NOTES.md`.
 
 ## Run
 

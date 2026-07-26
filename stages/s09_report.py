@@ -37,6 +37,9 @@ ACCENT = "#2a78d6"
 # for scatter, which is exactly why the facet grid is the primary figure.
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#4a3aa7", "#eda100", "#e87ba4", "#008300", "#e34948"]
 
+DEFAULT_MODEL = "intfloat/multilingual-e5-large"
+DEFAULT_TAG = DEFAULT_MODEL.split("/")[-1]
+
 VARIANT_TITLE = {
     "a_full": "(a) full lead",
     "b_nofirst": "(b) first sentence removed",
@@ -238,7 +241,7 @@ def fmt(x, spec="+.3f"):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="intfloat/multilingual-e5-large")
+    ap.add_argument("--model", default=DEFAULT_MODEL)
     args = ap.parse_args()
     tag = args.model.split("/")[-1]
 
@@ -247,23 +250,24 @@ def main() -> None:
 
     coords = {v: pd.read_parquet(PROCESSED / f"coords_{tag}_{v}.parquet") for v in V}
 
+    sfx = "" if tag == DEFAULT_TAG else f"{tag}_"
     print("rendering figures...")
     for v in V:
         df = coords[v]
         facet_figure(df, "lang", f"{VARIANT_TITLE[v]} — by article language",
-                     FIGS / f"{v}_language_facets.png")
+                     FIGS / f"{sfx}{v}_language_facets.png")
         scatter_figure(df, "lang", f"{VARIANT_TITLE[v]} — by article language",
-                       FIGS / f"{v}_language_scatter.png")
+                       FIGS / f"{sfx}{v}_language_scatter.png")
         facet_figure(df, "country_label", f"{VARIANT_TITLE[v]} — by country",
-                     FIGS / f"{v}_country_facets.png")
+                     FIGS / f"{sfx}{v}_country_facets.png")
         facet_figure(df, "type_label", f"{VARIANT_TITLE[v]} — by type",
-                     FIGS / f"{v}_type_facets.png")
+                     FIGS / f"{sfx}{v}_type_facets.png")
         scatter_figure(df, "country_label", f"{VARIANT_TITLE[v]} — by country",
-                       FIGS / f"{v}_country_scatter.png")
+                       FIGS / f"{sfx}{v}_country_scatter.png")
         scatter_figure(df, "type_label", f"{VARIANT_TITLE[v]} — by type",
-                       FIGS / f"{v}_type_scatter.png")
+                       FIGS / f"{sfx}{v}_type_scatter.png")
     length_figure(coords[V[0]].chars, M["shortest_quartile_char_cutoff"],
-                  FIGS / "lead_lengths.png")
+                  FIGS / f"{sfx}lead_lengths.png")
 
     CEN = None
     cmpath = PROCESSED / f"metrics_{tag}_centered.json"
@@ -277,14 +281,14 @@ def main() -> None:
                                   ("country_label", "country", "country")]:
                 facet_figure(cdf, col,
                              f"(a) full lead, per-language centered — by {nice}",
-                             FIGS / f"centered_{fn}_facets.png")
+                             FIGS / f"{sfx}centered_{fn}_facets.png")
 
     G = None
     gpath = PROCESSED / f"geo_{tag}.json"
     if gpath.exists():
         G = json.loads(gpath.read_text())
-        decay_figure(G, FIGS / "distance_decay.png")
-        radius_figure(G["radius_by_type"], FIGS / "radius_by_type.png")
+        decay_figure(G, FIGS / f"{sfx}distance_decay.png")
+        radius_figure(G["radius_by_type"], FIGS / f"{sfx}radius_by_type.png")
 
     P = None
     ppath = PROCESSED / f"parallel_{tag}.json"
@@ -292,7 +296,7 @@ def main() -> None:
         P = json.loads(ppath.read_text())
         cpath = PROCESSED / f"parallel_coords_{tag}.parquet"
         if cpath.exists():
-            dissolve_figure(pd.read_parquet(cpath), FIGS / "language_dissolve.png")
+            dissolve_figure(pd.read_parquet(cpath), FIGS / f"{sfx}language_dissolve.png")
 
     # ---------------------------------------------------------------- report
     L = M["length_distribution"]
@@ -548,9 +552,9 @@ easy, dominant partition and what remains is a flatter, less clumpy space. The
 structure that survives is real but weaker — a map of it will look like gradients,
 not islands.
 
-![centered, by type](figs/centered_type_facets.png)
+![centered, by type](figs/{sfx}centered_type_facets.png)
 
-![centered, by language](figs/centered_language_facets.png)
+![centered, by language](figs/{sfx}centered_language_facets.png)
 
 """
 
@@ -597,7 +601,7 @@ Correlation between log great-circle distance and embedding similarity (negative
 |---|---|---|---|---|
 {chr(10).join(rows)}
 
-![distance decay](figs/distance_decay.png)
+![distance decay](figs/{sfx}distance_decay.png)
 
 Two separable effects fall out of that table, and they are not the same thing:
 
@@ -623,7 +627,7 @@ everywhere. On the centred space the median museum sits at
 {G["random_pair_median_km"]:,.0f} km random-pair baseline
 ({rad["centered"]["vs_random"]:.2f}x).
 
-![neighbourhood radius by type](figs/radius_by_type.png)
+![neighbourhood radius by type](figs/{sfx}radius_by_type.png)
 
 The ordering is not something the method was told: most locally rooted are
 {local3}; most internationally legible are {univ3}. Local-history and open-air
@@ -736,7 +740,7 @@ cross-lingual signal is real content, not surface overlap. (Conservative
 caveat: "name absent" only checks the *English* label verbatim — a translated or
 transliterated form of the name could still be present in both texts.)
 
-![language dissolving](figs/language_dissolve.png)
+![language dissolving](figs/{sfx}language_dissolve.png)
 
 In the bottom row every language covers the whole cloud — but so does everything
 else. INLP does not so much mix the languages as flatten the space into a ball;
@@ -811,7 +815,7 @@ systematically under-selected.
 | p90 | {L["90%"]:.0f} |
 | max | {L["max"]:.0f} |
 
-![lead lengths](figs/lead_lengths.png)
+![lead lengths](figs/{sfx}lead_lengths.png)
 
 ### Location stripping (variant c)
 
@@ -859,21 +863,21 @@ highlighted) and the single-panel coloured scatter.
 
 **By article language** — the dominant axis
 
-![{v} language facets](figs/{v}_language_facets.png)
+![{v} language facets](figs/{sfx}{v}_language_facets.png)
 
-![{v} language scatter](figs/{v}_language_scatter.png)
+![{v} language scatter](figs/{sfx}{v}_language_scatter.png)
 
 **By country**
 
-![{v} country facets](figs/{v}_country_facets.png)
+![{v} country facets](figs/{sfx}{v}_country_facets.png)
 
-![{v} country scatter](figs/{v}_country_scatter.png)
+![{v} country scatter](figs/{sfx}{v}_country_scatter.png)
 
 **By type**
 
-![{v} type facets](figs/{v}_type_facets.png)
+![{v} type facets](figs/{sfx}{v}_type_facets.png)
 
-![{v} type scatter](figs/{v}_type_scatter.png)
+![{v} type scatter](figs/{sfx}{v}_type_scatter.png)
 
 """
 
@@ -891,7 +895,9 @@ highlighted) and the single-panel coloured scatter.
   the conclusion is not an artefact of the encoder.
 """
 
-    out = REPORTS / "report.md"
+    # The default encoder owns report.md; any other model writes alongside it so
+    # a comparison run cannot clobber the committed one.
+    out = REPORTS / ("report.md" if tag == DEFAULT_TAG else f"report_{tag}.md")
     out.write_text(md)
     print(f"wrote {out}")
     print(f"wrote {len(list(FIGS.glob('*.png')))} figures to {FIGS}")
