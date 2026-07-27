@@ -31,6 +31,29 @@ under it as expensive.
 - A stage that reads two frames must assert their `qid` order matches before
   using them positionally. Several already do; keep it up.
 
+## Crawling category trees
+
+`COVERAGE.md` was built by walking the museum category tree of 30 wikis. Three
+things about that generalise to any traversal of Wikipedia or Wikidata.
+
+- **Contain the walk; do not blocklist the drift.** Only descend into a category
+  that is itself museum-named. A blocklist cannot anticipate where a graph goes:
+  at depth 12 from `Category:Museums`, a name-based blocklist still let the walk
+  reach `National Film Registry films` (749 articles), `Royal Academicians` (594)
+  and `Psalms` (188), by way of a museum → its collection → the works in it.
+  Containment cut the English crawl from 63,964 articles to 33,216 and lost
+  nothing real.
+- **A drift term that matches the target vocabulary empties a wiki in silence.**
+  `musei` was added to catch `museologia`; it is Italian for *museums*, and it
+  pruned the entire Italian tree to 9 articles — a plausible-looking small number,
+  not an error. Assert that no drift pattern matches a wiki's own stems, and flag
+  any wiki returning fewer articles than the corpus already holds for it.
+- **A rate measured on a contained subtree does not transfer to an uncontained
+  one.** Connecticut gave 21% of crawled articles surviving as real misses and
+  90% precision; globally the same rule ran ~38% and ~65%, because a small clean
+  subtree contains none of the dealer galleries, films or video games that a
+  global crawl does. This is the same trap as `--corpus fixture`, in a new place.
+
 ## Long-running jobs
 
 - **Never pipe a long run through `tail`.** The pipeline buffers and you go blind

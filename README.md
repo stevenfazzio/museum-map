@@ -1,8 +1,14 @@
 # museum-map
 
-A semantic map of every museum in the world that has a Wikipedia article —
-**49,218 museums in 183 languages**, placed by what their article says about
-them, with regions named at four zoom levels.
+A semantic map of every museum Wikidata types as a museum and that has a
+Wikipedia article — **49,218 museums in 183 languages**, placed by what their
+article says about them, with regions named at four zoom levels.
+
+That first clause is load-bearing. A further **5,560 museums have a Wikipedia
+article and are absent from the corpus**, because Wikidata calls them houses and
+buildings rather than museums — 11.3% more, concentrated in the United States at
+24%. They are measured but deliberately not added; see
+[`COVERAGE.md`](COVERAGE.md).
 
 The question behind it: is such a map a real thing, or is it just a choropleth
 with a type filter? The answer is in [`FINDINGS.md`](FINDINGS.md). The short
@@ -42,6 +48,7 @@ search, and click a point to open its Wikipedia article.
 | `pipeline/` | **the project.** p01–p05 build the corpus, p10–p14 build and analyse the map |
 | `probe/` | historical. The go/no-go experiment that preceded the build — see below |
 | `FINDINGS.md` | what the finished map shows |
+| `COVERAGE.md` | which museums the corpus misses, and why |
 | `reports/` | generated maps (gitignored — regenerable, and the full one is ~14 MB) |
 | `data/` | everything fetched and computed (gitignored) |
 
@@ -67,7 +74,9 @@ the two, so nothing validated on the fixture can silently diverge on the real ru
 
 **Museum definition.** `wdt:P31/wdt:P279* wd:Q33506` — the transitive form. The
 Louvre is an instance of *art museum*, not of *museum*, so a plain `P31` match
-misses it.
+misses it. It still misses 5,560 museums that Wikidata types as houses and
+buildings with no museum claim at all; `p01` is the one stage that trusts `P31`
+completely, and [`COVERAGE.md`](COVERAGE.md) measures what that costs.
 
 **Which article represents a museum.** The lead comes from an official language
 of the museum's country when that article is at least half as long as the longest
