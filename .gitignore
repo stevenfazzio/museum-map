@@ -4,5 +4,8 @@ __pycache__/
 # Regenerable and expensive-to-ship: HTTP cache, embeddings, intermediate frames.
 # Everything here is rebuilt by ./run_all.sh.
 data/
+logs/
 # reports/figs IS tracked — report.md links to it, and it is 3.9 MB of small PNGs.
 .DS_Store
+# Generated maps: regenerable by ./run_map.sh, and the full one is ~15 MB.
+reports/map_*.html

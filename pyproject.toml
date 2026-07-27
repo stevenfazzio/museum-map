@@ -19,6 +19,10 @@ dependencies = [
     "tqdm>=4.66",
     "spacy>=3.8,<3.9",
     "xx-ent-wiki-sm @ https://github.com/explosion/spacy-models/releases/download/xx_ent_wiki_sm-3.8.0/xx_ent_wiki_sm-3.8.0-py3-none-any.whl",
+    # Map build: region naming + the interactive renderer.
+    "toponymy>=0.2",
+    "datamapplot>=0.5",
+    "anthropic>=0.40",
 ]
 
 [tool.ruff]
