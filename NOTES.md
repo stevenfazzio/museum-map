@@ -1,8 +1,8 @@
-# Where this stands, and what the build phase opens with
+# Where this stands, and what is still open
 
 The probe is finished (see `README.md` for findings, `reports/report.md` for the
-full numbers). This file is the handoff: what was decided, what is still open,
-and what to do first.
+full numbers). The **build** is the current phase: the corpus is fetched and the
+map pipeline runs end to end. This file is the handoff.
 
 ## Settled by the probe
 
@@ -29,55 +29,92 @@ Reports for both encoders are in `reports/` (`report.md` = e5,
 
 ## Settled in discussion
 
-1. **Corpus: the full 55,280**, not the stratified sample. A map should show what
-   exists. Keep the 2,000-museum stratified sample as the **dev fixture** so
-   iteration stays fast — it is already on disk and every stage reproduces it.
+1. **Corpus: the full 55,280**, not the stratified sample. Keep the 2,000-museum
+   stratified sample as the **dev fixture** so iteration stays fast.
 2. **Labelling: toponymy + datamapplot.** Load the `toponymy` skill before
-   touching it. Note for whoever picks this up: the 41% post-centring HDBSCAN
-   noise fraction is **not** a problem for labelling. Toponymy names *regions of
-   the space*, not sets of documents, so unassigned points are still covered by
-   the regional label they sit under. Do not design around it.
+   touching it. The 41% HDBSCAN noise fraction is **not** a problem for
+   labelling: toponymy names *regions of the space*, not sets of documents, so
+   unassigned points are still covered by the regional label they sit under. Do
+   not design around it.
+3. **Deliverable: interactive map + written findings.** Not an explorer app.
+4. **Naming LLM: Claude via the Anthropic API**, Haiku by default. Override with
+   `LLM_MODEL=... ./run_map.sh full`.
 
-## Open
+## What the build added
 
-**Encoder check — done, and it mattered.** See above: the language dominance
-that drove the first round's conclusions was an e5-large artefact. This is the
-argument for running the robustness check *before* building on a finding, not
-after. Any further encoder swap is a one-flag rerun:
+Two scripts, two corpora, one code path:
 
 ```bash
-MODEL=<hf/model-id> ./run_all.sh   # cache is warm; only embed + analyse re-run
+# fetch (network, hours) — run detached, watch the log, never pipe through tail
+uv run python -u build/b01_sitelinks.py --workers 3 > logs/b01_sitelinks.log 2>&1
+nohup uv run python -u build/b02_leads.py --workers 4 > logs/b02_leads.log 2>&1 &
+
+# map (compute) — identical code for both corpora
+./run_map.sh fixture     # 2,000 museums, ~10 min
+./run_map.sh full        # 49,218 museums, ~3 h
+uv run python -u build/b14_analyze.py --corpus full --tag short
 ```
 
-**The full fetch.** Measured from this run: 6,885 articles took 468 extract
-requests plus 145 sitelink requests, at ~3.3 s/request with zero retries and zero
-failures. Projected to 55,280 museums at 3.4 articles each:
+| stage | does | writes |
+|---|---|---|
+| `b01_sitelinks` | real Wikipedia articles for all 55,280 | `data/interim/full/sitelinks.parquet` |
+| `b02_leads` | leads for every article, per-wiki shards | `data/interim/full/leads{,_all}.parquet` |
+| `b03_types` | one museum type per museum | `data/interim/full/types.parquet` |
+| `b10_embed` | BGE-M3, variant (a) only | `data/processed/map_<corpus>/emb.npy` |
+| `b11_layout` | per-language LOO centring → UMAP 2D | `coords.parquet`, `emb_centered.npy` |
+| `b12_topics` | toponymy region names, all layers | `topics_<tag>.parquet`, `topic_names_<tag>.json` |
+| `b13_map` | datamapplot interactive HTML | `reports/map_<corpus>_<tag>.html` |
+| `b14_analyze` | re-runs the probe's metrics on the built map | `analysis_<tag>.json` |
+
+**Only variant (a).** The probe's (b) nofirst and (c) noloc existed to answer "is
+this just geography?", and that is settled — geography stays.
+
+## What the fetch actually cost
+
+Measured, not projected:
 
 | | |
 |---|---|
-| articles | ~190,000 |
-| requests | ~10,600 |
-| serial, as-is | **~10 hours** |
-| with 3–4 workers | **~3 hours** |
+| museums with ≥1 Wikipedia article | **49,243 of 55,280** (`sitelink_count` counts Commons too) |
+| articles | 145,712 |
+| extract requests | 6,493 (+1,106 sitelink) |
+| wall clock, 4 workers | **~95 min** |
+| permanent failures | **0** — 293/293 shards complete, none partial |
+| steady-state rate | 0.88 req/s (the big wikis finish first; the tail is slower) |
 
-It is **latency-bound, not throttle-bound** — `min_interval` is 0.15 s but
-observed spacing is 3.3 s, so 3–4 concurrent workers stay well inside polite WMF
-rates (~1 req/s aggregate). Worth adding before the big run.
+197 languages in the selected leads; English is only 19.2%.
 
-This is an overnight job, not a week of babysitting, and it is **resumable for
-free**: every response is cached by request hash, so a crash or a Ctrl-C costs
-only the in-flight request. Re-running skips everything already fetched.
+## Traps worth knowing
 
-Two things to fix before starting it, both learned the hard way here:
+- **`NUMBA_THREADING_LAYER=workqueue` is required.** torch ships its own OpenMP
+  runtime; once loaded, numba's default OpenMP layer segfaults inside
+  `fast_hdbscan`'s kdtree on the first clustering call, every time.
+  `KMP_DUPLICATE_LIB_OK` does not fix it. Set before importing numba.
+- **datamapplot: `hover_text_html_template` replaces `hover_text`,** so
+  `search_field="hover_text"` searches rendered HTML and matches almost nothing.
+  Pass an explicit search column in `extra_point_data` instead.
+- **pandas hands back Fortran-ordered arrays** from a multi-column `.to_numpy()`;
+  `fast_hdbscan`'s kdtree only accepts C-ordered. `np.ascontiguousarray`.
+- **Toponymy's default names run 12–15 words** and are unusable as map labels.
+  `b12_topics.NAME_INSTRUCTIONS` brings the median to 5.
+- **Do not pipe a long run through `tail`** — the pipeline buffers and you go
+  blind. Redirect to a log file. (Learned twice.)
+- **The local↔universal score is great-circle km to the 10 nearest *embedding*
+  neighbours** — not cosine distance to them, which measures embedding density
+  and is a different quantity entirely.
 
-- **Do not pipe the run through `tail`.** Progress output is buffered and you go
-  blind for hours. Redirect to a log file and watch that.
-- **Write the output parquet incrementally**, or at least checkpoint per wiki.
-  The fetches survive a crash but the final assembly currently does not.
+## Open
 
-## First moves
+**The stub tail is the real quality question.** 12% of leads are under 150
+characters and 30.6% under 300; the median is 491, against the fixture's 527, so
+the dev fixture flatters the corpus. On the fixture, sub-150-character museums
+are 48.4% unlabelled versus 38.2% for the longest, and sit at a 3,364 km
+neighbourhood radius — the *most* internationally dispersed bucket, because a
+one-line stub is generic and its nearest neighbours are other generic stubs
+anywhere on earth. Whether that stays a describable feature of the map or becomes
+a reason to filter is the open call. "A map should show what exists" argues for
+keeping them.
 
-1. Add bounded concurrency to `probe/wiki.py:fetch_leads`, then start the full
-   harvest + fetch overnight.
-2. While that runs: build the centring + UMAP + toponymy path against the 2,000
-   dev fixture, so it is ready when the real corpus lands.
+**Not verified interactively:** hover tooltips and click-through on the rendered
+map. Synthetic pointer events do not reach the WebGL canvas, so these were only
+verified as far as the data going in. The DOM search box was verified and works.
