@@ -25,6 +25,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from museum_map.common import write_parquet  # noqa: E402
 from pipeline.common import corpus_paths, fmt_eta  # noqa: E402
 
 MODEL = "BAAI/bge-m3"
@@ -62,30 +63,54 @@ def main() -> None:
     leads = leads.sort_values("qid").reset_index(drop=True)
     np.save(out_dir / "qids.npy", leads.qid.to_numpy())
 
-    # Row count alone cannot decide whether a cached embedding is still valid:
-    # changing which language's article represents each museum leaves the count
-    # identical and every vector wrong. The fingerprint covers the actual texts
-    # and the settings that change their vectors.
+    # Staleness is tracked PER ROW, not as one hash over the whole corpus.
+    # A single corpus-wide fingerprint detects a change correctly and then cannot
+    # say where it is, so one edited lead forces re-embedding all 49,218 — an hour
+    # and a half of GPU time to redo work that is still valid. Each museum's
+    # vector depends only on its own text (verified: re-encoding a text alone
+    # reproduces its stored vector bit-identically, so batch composition does not
+    # affect the result), which makes reuse safe row by row.
+    #
+    # `settings` are the things that invalidate *everything* — a different model
+    # or sequence cap changes every vector, so those still force a full rebuild.
     meta_path = emb_path.with_name("emb.meta.json")
-    fingerprint = {
-        "n": len(leads),
-        "model": args.model,
-        "max_seq_len": args.max_seq_len,
-        "texts_sha1": hashlib.sha1(
-            "\x00".join(leads.text.fillna("")).encode()
-        ).hexdigest(),
-    }
-    if emb_path.exists():
-        emb = np.load(emb_path)
-        prev = json.loads(meta_path.read_text()) if meta_path.exists() else None
-        if prev == fingerprint and len(emb) == len(leads):
-            print(f"{emb_path.name}: cached and fingerprint matches, nothing to do")
-            return
-        if prev is None:
-            print(f"{emb_path.name}: no fingerprint on disk — cannot verify, re-embedding")
+    index_path = emb_path.with_name("emb.index.parquet")
+    settings = {"model": args.model, "max_seq_len": args.max_seq_len}
+    row_hash = pd.Series(
+        [hashlib.sha1(t.encode()).hexdigest()[:16] for t in leads.text.fillna("")],
+        index=leads.index,
+    )
+
+    cached: dict[str, np.ndarray] = {}
+    if emb_path.exists() and index_path.exists() and meta_path.exists():
+        prev_settings = json.loads(meta_path.read_text())
+        if {k: prev_settings.get(k) for k in settings} == settings:
+            prev_emb = np.load(emb_path)
+            prev_idx = pd.read_parquet(index_path)
+            if len(prev_emb) == len(prev_idx):
+                cached = {
+                    q: prev_emb[i]
+                    for i, (q, h) in enumerate(zip(prev_idx.qid, prev_idx.source_sha1))
+                    if h is not None
+                }
+                cached_hash = dict(zip(prev_idx.qid, prev_idx.source_sha1))
+                cached = {q: v for q, v in cached.items() if q in cached_hash}
+                reusable = {
+                    q for q, h in zip(leads.qid, row_hash) if cached_hash.get(q) == h
+                }
+                cached = {q: v for q, v in cached.items() if q in reusable}
         else:
-            differing = [k for k in fingerprint if prev.get(k) != fingerprint[k]]
-            print(f"{emb_path.name}: stale ({', '.join(differing)} changed) — re-embedding")
+            changed = [k for k in settings if prev_settings.get(k) != settings[k]]
+            print(f"{', '.join(changed)} changed — every vector is invalid, full re-embed")
+
+    todo_mask = ~leads.qid.isin(cached)
+    n_reuse, n_todo = len(leads) - int(todo_mask.sum()), int(todo_mask.sum())
+    if n_todo == 0:
+        print(f"{emb_path.name}: all {len(leads):,} rows still match their lead, nothing to do")
+        return
+    if n_reuse:
+        print(f"reusing {n_reuse:,} cached vectors, re-embedding {n_todo:,} changed rows "
+              f"({n_todo / len(leads):.1%})")
 
     device = args.device or ("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"corpus={args.corpus}  rows={len(leads):,}  model={args.model}  device={device}")
@@ -93,7 +118,8 @@ def main() -> None:
     model = SentenceTransformer(args.model, device=device)
     model.max_seq_length = min(model.max_seq_length, args.max_seq_len)
     prefix = "query: " if "e5" in args.model.lower() else ""
-    texts = [prefix + t for t in leads.text.fillna("")]
+    todo = leads[todo_mask].reset_index(drop=True)
+    texts = [prefix + t for t in todo.text.fillna("")]
 
     tok = model.tokenizer
     lens = [len(tok.encode(t, add_special_tokens=True)) for t in texts]
@@ -107,7 +133,15 @@ def main() -> None:
     # GPU time and the failure mode that actually happened was an OOM part-way
     # through, which lost the lot. Partial work now survives a crash and a re-run
     # picks up where it stopped.
-    part_path = emb_path.with_name(emb_path.name + ".part.npy")
+    # The checkpoint is named after the exact set of rows being embedded. Without
+    # that, a partial file left by a run over a *different* subset would look
+    # resumable purely because it is shorter, and its vectors would be silently
+    # assigned to the wrong museums.
+    todo_sig = hashlib.sha1("\x00".join(todo.qid).encode()).hexdigest()[:12]
+    for old in emb_path.parent.glob("emb.npy.part.*.npy"):
+        if todo_sig not in old.name:
+            old.unlink(missing_ok=True)
+    part_path = emb_path.with_name(f"emb.npy.part.{todo_sig}.npy")
     done: list[np.ndarray] = []
     n_done = 0
     if part_path.exists():
@@ -138,15 +172,24 @@ def main() -> None:
         print(f"  {n_done:,}/{len(texts):,} embedded  {rate:.0f} rows/s  "
               f"eta {fmt_eta((len(texts) - n_done) / rate)}", flush=True)
 
-    emb = np.concatenate(done)
+    fresh = np.concatenate(done)
+    assert len(fresh) == len(todo), f"{len(fresh)} vectors for {len(todo)} changed rows"
+    cached.update(dict(zip(todo.qid, fresh)))
+
+    # Reassemble in the corpus's qid order, so row i always means qids[i] whether
+    # the vector was reused or just computed.
+    emb = np.vstack([cached[q] for q in leads.qid]).astype(np.float32)
     assert len(emb) == len(leads), f"{len(emb)} vectors for {len(leads)} museums"
     tmp = emb_path.with_name(emb_path.name + ".tmp")
     with open(tmp, "wb") as fh:
         np.save(fh, emb)
     tmp.replace(emb_path)
-    meta_path.write_text(json.dumps(fingerprint, indent=2))
+    meta_path.write_text(json.dumps({**settings, "n": len(leads)}, indent=2))
+    write_parquet(pd.DataFrame({"qid": leads.qid, "source_sha1": row_hash.to_numpy()}),
+                  index_path, expect_cols=["qid", "source_sha1"])
     part_path.unlink(missing_ok=True)
-    print(f"\n{emb.shape} -> {emb_path}  ({fmt_eta(time.monotonic() - t0)})")
+    print(f"\n{emb.shape} -> {emb_path}  "
+          f"({n_todo:,} embedded in {fmt_eta(time.monotonic() - t0)}, {n_reuse:,} reused)")
 
 
 if __name__ == "__main__":

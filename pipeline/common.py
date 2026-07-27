@@ -149,19 +149,38 @@ def select_leads(
     # The corpus's own language set is what decides whether a Wikidata code names
     # a real Wikipedia, so it is derived here rather than fetched again.
     langs = official_languages(set(all_leads.lang.unique()))
-    local = [lg in langs.get(country_by_qid.get(q, ""), ()) for q, lg in
-             zip(all_leads.qid, all_leads.lang)]
-    df = all_leads.assign(is_local=local)
+    country = [country_by_qid.get(q, "") for q in all_leads.qid]
+    local = [lg in langs.get(c, ()) for c, lg in zip(country, all_leads.lang)]
+    df = all_leads.assign(country=country, is_local=local)
 
+    # A country usually has several "local" languages and they are not
+    # interchangeable. Wikidata gives the United States English (P2936) *and*
+    # Spanish and Hawaiian (P37, because they are official in Puerto Rico and
+    # Hawaii) — so without a preference order, a US museum whose Spanish article
+    # happens to be longer than its English one is represented in Spanish.
+    #
+    # The order comes from the corpus: how many articles about *that country's*
+    # museums exist in each language. That is a fact about coverage, not about
+    # the current selection, so it does not feed back on itself. It resolves the
+    # US to English, China to Chinese, Japan to Japanese. It cannot distinguish a
+    # museum in Puerto Rico from one in Manhattan — country-level data has no way
+    # to — so it picks the national plurality and is wrong for the minority case.
+    coverage = df.groupby(["country", "lang"]).size()
+    priority = [
+        coverage.get((c, lg), 0) if is_loc else 0
+        for c, lg, is_loc in zip(df.country, df.lang, df.is_local)
+    ]
     longest = df.groupby("qid").chars.transform("max")
     # A local article is eligible only if it is not much thinner than the best
-    # available; `eligible` is then sorted ahead of everything else.
-    df = df.assign(eligible=df.is_local & (df.chars >= min_fraction * longest))
+    # available; `eligible` is then sorted ahead of everything else, and the
+    # better-covered local language ahead of a merely longer one.
+    df = df.assign(eligible=df.is_local & (df.chars >= min_fraction * longest),
+                   priority=priority)
     return (
-        df.sort_values(["qid", "eligible", "chars", "lang"],
-                       ascending=[True, False, False, True])
+        df.sort_values(["qid", "eligible", "priority", "chars", "lang"],
+                       ascending=[True, False, False, False, True])
         .drop_duplicates("qid", keep="first")
-        .drop(columns=["eligible"])
+        .drop(columns=["eligible", "priority", "country"])
         .reset_index(drop=True)
     )
 
