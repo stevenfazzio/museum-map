@@ -170,6 +170,29 @@ finest layer still sits inside a named region at a coarser one.
   article overcorrects — it pushes leads under 200 characters from 18.4% to
   23.7%. The 50% rule buys 13 points of locality (56.0% → 69.1%) for one point of
   stubs.
+- **What the tooltip shows, and why it is not what the map is built from.** 80.9%
+  of leads are not in English — the direct consequence of preferring the
+  local-language article — so the tooltip was unreadable for most of the map.
+  Each museum now gets a one-sentence English summary of *its embedded lead*
+  (Haiku 4.5, ~$21 for the corpus), not of its English Wikipedia article, because
+  the tooltip should explain why a point sits where it does.
+
+  These are shown, never embedded. A paired A/B on the same 2,000 fixture museums
+  found summaries were *not* homogenising — pairwise-similarity spread was
+  slightly wider (0.078 vs 0.074) and cluster structure nearly identical (61 vs
+  62 fine regions, same layer count, same unlabelled rate) — and they scored
+  higher on the type probe (0.523 vs 0.470). That gain is not trustworthy: the
+  probe is measured against Wikidata's *English* type labels, which English
+  summaries are lexically closer to by construction.
+
+  The decisive number is grounding. An Opus 5 audit of 150 summaries, weighted
+  toward thin leads, found **8% assert something their source does not** — drift
+  rather than invention ("named after the anatomist Luigi Cattaneo" → "made by
+  him"; "a 1676 Dutch prison" → "a fort"). Acceptable for a reading aid labelled
+  as machine-generated with the article one click away; not acceptable for the
+  embedding, where it would place ~1 museum in 12–20 partly by a claim its
+  article never made, unauditably, and would falsify the project's own
+  description of what the map is.
 - **What a museum is called.** 15.1% of the corpus (7,421 museums) has no English
   label on Wikidata, and the harvest stores the QID in the label column for those
   rather than leaving it null — so a `fillna` fallback silently never fires and

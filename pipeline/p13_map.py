@@ -100,7 +100,32 @@ def main() -> None:
         "https://" + leads.lang.astype(str) + ".wikipedia.org/wiki/"
         + leads.title.astype(str).str.replace(" ", "_", regex=False)
     )
-    snippet = leads.text.fillna("").astype(str).str.slice(0, 240).map(html.escape)
+    # 80.9% of leads are not in English, because the corpus prefers the
+    # local-language article. Right for placing a museum, unreadable for most
+    # people looking at one — so the tooltip shows p06's English summary where it
+    # exists and falls back to the lead itself where it does not.
+    #
+    # Summaries are a reading aid, NOT what the map is built from. An audit of 150
+    # (weighted toward thin leads) found 8% assert something their source does not
+    # — usually drift rather than invention, e.g. "named after the anatomist" ->
+    # "made by him". That is a fine trade for a tooltip with the article one click
+    # away, and not a fine trade for the embedding, so the summaries are shown and
+    # the originals are embedded. The tooltip says which is which.
+    summ_path = out_dir / "summaries.parquet"
+    summary = pd.Series([""] * len(leads), index=leads.index)
+    if summ_path.exists():
+        n_before = len(leads)
+        leads = leads.merge(pd.read_parquet(summ_path), on="qid", how="left")
+        assert len(leads) == n_before, "summary merge changed row count"
+        summary = leads.summary.fillna("")
+        print(f"english summaries: {(summary != '').mean():.1%} of museums")
+    else:
+        print(f"note: no summaries ({summ_path} missing) — run pipeline/p06_summaries.py")
+
+    lead_snippet = leads.text.fillna("").astype(str).str.slice(0, 240)
+    is_summary = summary != ""
+    snippet = summary.where(is_summary, lead_snippet).astype(str).map(html.escape)
+    source_note = np.where(is_summary, "AI summary", "lead section")
 
     # The search corpus is an explicit column rather than `hover_text`: supplying
     # `hover_text_html_template` replaces hover_text with the rendered tooltip
@@ -116,6 +141,7 @@ def main() -> None:
         "lang": leads.lang.astype(str),
         "url": url,
         "snippet": snippet,
+        "source_note": source_note,
         "region": label_layers[0],
         "search": search_blob,
     })
@@ -125,7 +151,8 @@ def main() -> None:
         "<div style='font-weight:600;margin-bottom:.2rem'>{name}</div>"
         "<div style='opacity:.75;font-size:.85em;margin-bottom:.4rem'>"
         "{country} · {type} · {lang}.wikipedia</div>"
-        "<div style='font-size:.85em;line-height:1.35'>{snippet}…</div>"
+        "<div style='font-size:.85em;line-height:1.35'>{snippet}</div>"
+        "<div style='opacity:.55;font-size:.72em;margin-top:.45rem'>{source_note}</div>"
         "</div>"
     )
 
