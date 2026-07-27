@@ -80,17 +80,57 @@ LOCAL_MIN_FRACTION = 0.5
 COUNTRY_LANGS = """
 SELECT ?c ?code WHERE {
   ?c wdt:P31/wdt:P279* wd:Q6256 .
-  ?c wdt:P37 ?lang .
+  ?c wdt:%s ?lang .
   ?lang wdt:P424 ?code .
 }
 """
 
+# P37 is "official language"; P2936 is "language used". P37 alone is not a usable
+# definition of "the local language" for three reasons found in the corpus:
+#
+#   * A country can have no official language. Wikidata lists the United States'
+#     P37 as Spanish and Hawaiian — English is absent, because there is no
+#     federal official language. Under P37 alone the rule therefore treats
+#     Spanish as local for all 5,080 US museums and actively prefers the Spanish
+#     article over the English one.
+#   * P37 codes are not always Wikipedia codes. China's is `zh-cn` and Taiwan's
+#     `zh-tw`; Wikipedia has neither, only `zh`, so no Chinese article ever
+#     counted as local for a Chinese or Taiwanese museum.
+#   * P2936 alone is no better — it skews to minority and indigenous languages
+#     (China's list is Tibetan, Hakka, Kazakh...; Japan's includes Ainu).
+#
+# The union of the two, with region subtags stripped when the bare code is a real
+# Wikipedia, covers every country in the corpus with 100+ museums.
+LANG_PROPERTIES = ("P37", "P2936")
 
-def official_languages() -> dict[str, set[str]]:
-    """country QID -> Wikimedia language codes of its official languages (cached)."""
+
+def official_languages(wiki_langs: set[str] | None = None) -> dict[str, set[str]]:
+    """country QID -> Wikipedia language codes spoken there (cached).
+
+    `wiki_langs` is the set of codes that actually exist as Wikipedias; a
+    Wikidata code is kept when it is one of those, and otherwise retried with its
+    region subtag stripped (`zh-tw` -> `zh`). Codes that match neither are
+    dropped, which is what should happen to a language with no Wikipedia.
+    """
+    raw: dict[str, set[str]] = {}
+    for prop in LANG_PROPERTIES:
+        for row in sparql(COUNTRY_LANGS % prop, namespace=f"wdqs_country_lang_{prop}"):
+            raw.setdefault(qid(row["c"]), set()).add(row["code"])
+    if wiki_langs is None:
+        return raw
+
     out: dict[str, set[str]] = {}
-    for row in sparql(COUNTRY_LANGS, namespace="wdqs_country_lang"):
-        out.setdefault(qid(row["c"]), set()).add(row["code"])
+    for country, codes in raw.items():
+        keep = set()
+        for code in codes:
+            if code in wiki_langs:
+                keep.add(code)
+            elif "-" in code and code.split("-")[0] in wiki_langs:
+                # `be-tarask` and `zh-yue` are real Wikipedias and are kept by the
+                # branch above; this only fires for region subtags that are not.
+                keep.add(code.split("-")[0])
+        if keep:
+            out[country] = keep
     return out
 
 
@@ -103,10 +143,12 @@ def select_leads(
     """One row per museum: the local-language lead if long enough, else the longest.
 
     `all_leads` needs qid/lang/chars. Ties break on language code so re-runs are
-    identical. Museums whose country has no official language on record, or which
-    have no article in one, fall through to longest-wins.
+    identical. Museums whose country has no language on record, or which have no
+    article in one, fall through to longest-wins.
     """
-    langs = official_languages()
+    # The corpus's own language set is what decides whether a Wikidata code names
+    # a real Wikipedia, so it is derived here rather than fetched again.
+    langs = official_languages(set(all_leads.lang.unique()))
     local = [lg in langs.get(country_by_qid.get(q, ""), ()) for q, lg in
              zip(all_leads.qid, all_leads.lang)]
     df = all_leads.assign(is_local=local)

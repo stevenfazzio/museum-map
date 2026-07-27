@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -142,11 +143,26 @@ def main() -> None:
     if args.limit:
         leads = leads.head(args.limit)
 
+    # A summary describes a specific lead, so keying it on qid alone makes a
+    # changed lead invisible: the row is still there, and its summary now
+    # describes text that is no longer in the corpus. (Changing the lead-selection
+    # rule moved 13.5% of leads once already.) The source hash makes that
+    # detectable, the same way p10 fingerprints the embedding inputs.
+    src_hash = {q: hashlib.sha1(t.encode()).hexdigest()[:16]
+                for q, t in zip(leads.qid, leads.text.fillna(""))}
+
     have: dict[str, str] = {}
     if out_path.exists():
         prev = pd.read_parquet(out_path)
-        have = dict(zip(prev.qid, prev.summary))
-        print(f"resuming: {len(have):,} summaries already on disk")
+        if "source_sha1" in prev.columns:
+            fresh = prev[[src_hash.get(q) == h for q, h in zip(prev.qid, prev.source_sha1)]]
+            stale = len(prev) - len(fresh)
+            have = dict(zip(fresh.qid, fresh.summary))
+            print(f"resuming: {len(have):,} summaries still match their lead"
+                  + (f", {stale:,} stale (lead changed)" if stale else ""))
+        else:
+            print(f"{out_path.name}: no source hashes — cannot verify {len(prev):,} "
+                  "summaries against their leads, regenerating all")
 
     todo = leads[~leads.qid.isin(have)]
     name_col = leads.label.where(leads.has_label, leads.title) if "has_label" in leads else leads.label
@@ -172,8 +188,9 @@ def main() -> None:
 
     def flush() -> None:
         df = pd.DataFrame({"qid": list(have), "summary": list(have.values())})
+        df["source_sha1"] = df.qid.map(src_hash)
         write_parquet(df.sort_values("qid").reset_index(drop=True), out_path,
-                      expect_cols=["qid", "summary"])
+                      expect_cols=["qid", "summary", "source_sha1"])
 
     def on_done(idx: int, batch_rows: list[tuple], got: dict[int, str], usage) -> None:
         qids = qid_batches[idx]
