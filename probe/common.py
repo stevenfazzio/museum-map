@@ -13,6 +13,7 @@ import json
 import os
 import random
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -109,26 +110,41 @@ def write_parquet(df, path: Path, *, expect_cols: list[str] | None = None) -> No
 # ---------------------------------------------------------------- http
 
 
-_LAST_CALL: dict[str, float] = {}
-_SESSION: requests.Session | None = None
+# Rate limits are enforced as *reservations* rather than "sleep since last call",
+# because the latter is a read-then-write race once several threads share a host:
+# each would see the same stale timestamp and fire simultaneously. Reserving the
+# next free slot under a lock, then sleeping until it outside the lock, keeps
+# spacing correct while letting threads on different hosts proceed in parallel.
+_NEXT_FREE: dict[str, float] = {}
+_THROTTLE_LOCK = threading.Lock()
+_LOCAL = threading.local()
+
+# A ceiling on aggregate request rate across every host, so raising the worker
+# count can never turn into a burst against WMF as a whole. Per-host intervals
+# still apply on top of this.
+GLOBAL_MIN_INTERVAL = 0.25
+_GLOBAL_KEY = "\x00aggregate"
 
 
 def session() -> requests.Session:
-    global _SESSION
-    if _SESSION is None:
+    """One Session per thread. requests.Session is not documented as thread-safe."""
+    s = getattr(_LOCAL, "session", None)
+    if s is None:
         s = requests.Session()
         s.headers.update({"User-Agent": USER_AGENT, "Accept-Encoding": "gzip"})
-        _SESSION = s
-    return _SESSION
+        _LOCAL.session = s
+    return s
 
 
 def _throttle(host: str, min_interval: float) -> None:
-    now = time.monotonic()
-    last = _LAST_CALL.get(host, 0.0)
-    wait = min_interval - (now - last)
+    limits = ((host, min_interval), (_GLOBAL_KEY, GLOBAL_MIN_INTERVAL))
+    with _THROTTLE_LOCK:
+        slot = max([time.monotonic()] + [_NEXT_FREE.get(k, 0.0) for k, _ in limits])
+        for key, interval in limits:
+            _NEXT_FREE[key] = slot + interval
+    wait = slot - time.monotonic()
     if wait > 0:
         time.sleep(wait)
-    _LAST_CALL[host] = time.monotonic()
 
 
 class HttpError(RuntimeError):
