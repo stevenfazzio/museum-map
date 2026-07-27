@@ -5,7 +5,7 @@ questions of the built map, on whatever corpus it was built from, so the report
 can say whether the conclusions replicated or were an artefact of the sample.
 
 Every metric here is deliberately the same one the probe used, so the numbers are
-comparable to `reports/report.md`:
+comparable to `probe/reports/`:
 
 * ARI of the discovered regions against country / type / language. ARI compares
   partitions and is punished when ~50 regions meet ~200 countries, so it is
@@ -43,8 +43,8 @@ import pandas as pd  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from build.common import corpus_paths  # noqa: E402
-from probe.common import SEED  # noqa: E402
+from pipeline.common import corpus_paths  # noqa: E402
+from museum_map.common import SEED  # noqa: E402
 
 PROBE_CAP = 25_000  # rows fed to the linear probe; full-corpus lbfgs is otherwise slow
 NN_K = 10

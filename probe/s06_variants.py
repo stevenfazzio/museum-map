@@ -30,9 +30,9 @@ from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from probe.common import INTERIM, qid, sparql, write_parquet  # noqa: E402
-from probe.textproc import build_pattern, split_first_sentence, strip_locations  # noqa: E402
-from probe.wiki import fetch_labels_aliases  # noqa: E402
+from museum_map.common import INTERIM, qid, sparql, write_parquet  # noqa: E402
+from museum_map.textproc import build_pattern, split_first_sentence, strip_locations  # noqa: E402
+from museum_map.wiki import fetch_labels_aliases  # noqa: E402
 
 MIN_CHARS = 20
 CHUNK = 200

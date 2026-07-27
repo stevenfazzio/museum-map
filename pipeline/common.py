@@ -1,10 +1,9 @@
-"""Paths and shared helpers for the full-corpus build.
+"""Paths and shared helpers for the map pipeline.
 
-The probe's 2,000-museum artefacts stay exactly where they are and keep their
-names — they are the dev fixture now, and every build stage must be runnable
-against either corpus. Full-corpus artefacts therefore live in their own
-subdirectories rather than being distinguished by filename suffix, so nothing
-here can overwrite a fixture file by accident.
+Every stage runs against either corpus via `--corpus`, so the two must never be
+able to touch each other's files. Full-corpus artefacts live under their own
+subdirectories rather than being distinguished by a filename suffix, which makes
+an accidental overwrite a missing-file error instead of silent corruption.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd  # noqa: E402
 
-from probe.common import INTERIM, PROCESSED, ROOT, qid, sparql  # noqa: E402,F401
+from museum_map.common import INTERIM, PROCESSED, ROOT, qid, sparql  # noqa: E402,F401
 
 FULL_INTERIM = INTERIM / "full"
 FULL_PROCESSED = PROCESSED / "full"
@@ -32,21 +31,22 @@ CORPORA = ("fixture", "full")
 def corpus_paths(name: str) -> tuple[Path, Path]:
     """(leads parquet, output dir) for a corpus name.
 
-    `fixture` is the probe's 2,000-museum sample, kept as the fast iteration path;
-    `full` is all 55,280. Every map stage takes `--corpus` and is otherwise
-    identical between the two, so nothing can be validated on the fixture and then
-    silently diverge on the real run.
+    `fixture` is a 2,000-museum random sample of the corpus (p05), kept as the
+    fast iteration path; `full` is all 49,218 museums with a usable lead. Every
+    map stage takes `--corpus` and is otherwise identical between the two, so
+    nothing can be validated on the fixture and then silently diverge on the real
+    run.
     """
     if name not in CORPORA:
         raise SystemExit(f"unknown corpus {name!r}; expected one of {CORPORA}")
     if name == "full":
         leads = FULL_INTERIM / "leads.parquet"
     else:
-        # b04 re-selects the fixture's leads under the map's rule; the probe's own
-        # leads.parquet keeps the longest-wins rule that report.md was written from.
-        leads = INTERIM / "fixture_map_leads.parquet"
+        # The fixture is a random sample of the finished corpus, built by p05.
+        # It deliberately does not reuse the probe stratified sample.
+        leads = INTERIM / "fixture_leads.parquet"
         if not leads.exists():
-            raise SystemExit(f"missing {leads} — run build/b04_fixture_leads.py first")
+            raise SystemExit(f"missing {leads} — run pipeline/p05_fixture.py first")
     out = PROCESSED / f"map_{name}"
     out.mkdir(parents=True, exist_ok=True)
     if not leads.exists():

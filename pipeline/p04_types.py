@@ -24,12 +24,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from build.common import FULL_INTERIM  # noqa: E402
-from probe.common import INTERIM, RAW, qid, sparql, write_parquet  # noqa: E402
-from probe.wiki import fetch_en_labels  # noqa: E402
+from pipeline.common import FULL_INTERIM  # noqa: E402
+from museum_map.common import INTERIM, RAW, SUBCLASSES, qid, sparql, write_parquet  # noqa: E402
+from museum_map.wiki import fetch_en_labels  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "stages"))
-from s01_harvest import SUBCLASSES  # noqa: E402
 
 # The probe used 15 against a 2,000-row sample. The full corpus is 27x larger, so
 # a longer tail of types clears a usable count; 25 keeps the rarest bucket in the

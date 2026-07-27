@@ -29,9 +29,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from build.common import corpus_paths, fmt_eta  # noqa: E402
-from probe.common import SEED, write_parquet  # noqa: E402
-from probe.debias import centered  # noqa: E402
+from pipeline.common import corpus_paths, fmt_eta  # noqa: E402
+from museum_map.common import SEED, write_parquet  # noqa: E402
+from museum_map.debias import centered  # noqa: E402
 
 
 def main() -> None:

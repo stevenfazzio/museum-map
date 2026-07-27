@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from probe.common import FIGS, PROCESSED, REPORTS  # noqa: E402
+from museum_map.common import FIGS, PROBE_REPORTS, PROCESSED  # noqa: E402
 
 SURFACE = "#fcfcfb"
 INK = "#0b0b0b"
@@ -897,7 +897,7 @@ highlighted) and the single-panel coloured scatter.
 
     # The default encoder owns report.md; any other model writes alongside it so
     # a comparison run cannot clobber the committed one.
-    out = REPORTS / ("report.md" if tag == DEFAULT_TAG else f"report_{tag}.md")
+    out = PROBE_REPORTS / ("report.md" if tag == DEFAULT_TAG else f"report_{tag}.md")
     out.write_text(md)
     print(f"wrote {out}")
     print(f"wrote {len(list(FIGS.glob('*.png')))} figures to {FIGS}")

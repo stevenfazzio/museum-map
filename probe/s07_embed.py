@@ -19,7 +19,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from probe.common import INTERIM, PROCESSED  # noqa: E402
+from museum_map.common import INTERIM, PROCESSED  # noqa: E402
 
 VARIANTS = {"a_full": "text_full", "b_nofirst": "text_nofirst", "c_noloc": "text_noloc"}
 

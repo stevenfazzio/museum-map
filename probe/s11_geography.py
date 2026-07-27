@@ -42,8 +42,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from probe.common import INTERIM, PROCESSED, SEED, write_parquet  # noqa: E402
-from probe.debias import centered, l2  # noqa: E402
+from museum_map.common import INTERIM, PROCESSED, SEED, write_parquet  # noqa: E402
+from museum_map.debias import centered, l2  # noqa: E402
 
 EARTH_KM = 6371.0088
 K_NN = 10

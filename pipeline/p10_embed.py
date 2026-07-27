@@ -25,7 +25,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from build.common import corpus_paths, fmt_eta  # noqa: E402
+from pipeline.common import corpus_paths, fmt_eta  # noqa: E402
 
 MODEL = "BAAI/bge-m3"
 

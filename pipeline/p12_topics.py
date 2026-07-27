@@ -40,8 +40,8 @@ import pandas as pd  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from build.common import corpus_paths, fmt_eta  # noqa: E402
-from probe.common import write_parquet  # noqa: E402
+from pipeline.common import corpus_paths, fmt_eta  # noqa: E402
+from museum_map.common import write_parquet  # noqa: E402
 
 OBJECT_DESCRIPTION = "museum"
 CORPUS_DESCRIPTION = (

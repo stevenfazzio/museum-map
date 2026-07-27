@@ -1,11 +1,11 @@
-"""Wikibase + Wikipedia API helpers (all cached through probe.common.request_json)."""
+"""Wikibase + Wikipedia API helpers (all cached through museum_map.common.request_json)."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from probe.common import WIKIDATA_API, request_json
+from museum_map.common import WIKIDATA_API, request_json
 
 # action=query&prop=extracts is capped at 20 titles per request for anonymous callers.
 EXTRACT_BATCH = 20

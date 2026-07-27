@@ -27,13 +27,12 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from probe.common import RAW, qid, sparql, write_parquet  # noqa: E402
+from museum_map.common import RAW, SUBCLASSES, qid, sparql, write_parquet  # noqa: E402
 
 ROW_CAP = 50_000
 QID_MAX = 200_000_000
 MAX_DEPTH = 10
 
-SUBCLASSES = "SELECT ?t WHERE { ?t wdt:P279* wd:Q33506 }"
 
 # "http://www.wikidata.org/entity/Q" is 32 chars, so SUBSTR(...,33) is the number.
 TMPL = """

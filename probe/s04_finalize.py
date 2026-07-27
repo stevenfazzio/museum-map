@@ -19,11 +19,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from probe.common import INTERIM, N_SAMPLE, qid, sparql, write_parquet  # noqa: E402
-from probe.wiki import fetch_en_labels  # noqa: E402
+from museum_map.common import INTERIM, N_SAMPLE, SUBCLASSES, qid, sparql, write_parquet  # noqa: E402
+from museum_map.wiki import fetch_en_labels  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from s01_harvest import SUBCLASSES  # noqa: E402
 from s02_sample import sqrt_allocate  # noqa: E402
 
 TOP_K_TYPES = 15

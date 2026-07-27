@@ -26,10 +26,15 @@ CACHE = DATA / "cache"
 RAW = DATA / "raw"
 INTERIM = DATA / "interim"
 PROCESSED = DATA / "processed"
+# `reports/` is where the pipeline writes the finished maps (gitignored — they are
+# regenerable and the full one is ~14 MB). The probe keeps its own reports and
+# figures next to its code, so re-running it cannot scatter output into the
+# pipeline's directory.
 REPORTS = ROOT / "reports"
-FIGS = REPORTS / "figs"
+PROBE_REPORTS = ROOT / "probe" / "reports"
+FIGS = PROBE_REPORTS / "figs"
 
-for _d in (CACHE, RAW, INTERIM, PROCESSED, REPORTS, FIGS):
+for _d in (CACHE, RAW, INTERIM, PROCESSED, REPORTS, PROBE_REPORTS, FIGS):
     _d.mkdir(parents=True, exist_ok=True)
 
 SEED = 42
@@ -42,6 +47,15 @@ USER_AGENT = (
 
 WDQS = "https://query.wikidata.org/sparql"
 WIKIDATA_API = "https://www.wikidata.org/w/api.php"
+
+# Every subclass of "museum", transitively. Used to decide both what counts as a
+# museum at harvest time and what counts as a *museum type* when labelling, so it
+# lives here rather than in either pipeline.
+#
+# The transitive form is required: the Louvre is an instance of *art museum*, not
+# of *museum*, so a plain P31 match misses it
+# (verified: `ASK { wd:Q19675 wdt:P31 wd:Q33506 }` -> false).
+SUBCLASSES = "SELECT ?t WHERE { ?t wdt:P279* wd:Q33506 }"
 
 # ---------------------------------------------------------------- disk cache
 

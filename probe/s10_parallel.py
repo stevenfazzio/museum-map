@@ -45,8 +45,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from probe.common import INTERIM, PROCESSED, SEED  # noqa: E402
-from probe.debias import centered, inlp, l2  # noqa: E402
+from museum_map.common import INTERIM, PROCESSED, SEED  # noqa: E402
+from museum_map.debias import centered, inlp, l2  # noqa: E402
 
 INLP_ITERS = 3
 K_NN = 10

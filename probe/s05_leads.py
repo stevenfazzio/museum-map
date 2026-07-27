@@ -16,9 +16,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from probe.common import INTERIM, write_parquet  # noqa: E402
-from probe.textproc import normalize_ws  # noqa: E402
-from probe.wiki import fetch_leads  # noqa: E402
+from museum_map.common import INTERIM, write_parquet  # noqa: E402
+from museum_map.textproc import normalize_ws  # noqa: E402
+from museum_map.wiki import fetch_leads  # noqa: E402
 
 # XLM-R's 100 pretraining languages — multilingual-e5-large inherits this vocabulary.
 XLMR_LANGS = set(

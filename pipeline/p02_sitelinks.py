@@ -20,9 +20,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from build.common import FULL_INTERIM, fmt_eta  # noqa: E402
-from probe.common import RAW, write_parquet  # noqa: E402
-from probe.wiki import fetch_sitelinks, wikipedia_sites  # noqa: E402
+from pipeline.common import FULL_INTERIM, fmt_eta  # noqa: E402
+from museum_map.common import RAW, write_parquet  # noqa: E402
+from museum_map.wiki import fetch_sitelinks, wikipedia_sites  # noqa: E402
 
 
 def main() -> None:

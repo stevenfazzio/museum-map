@@ -22,7 +22,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from probe.common import INTERIM, N_SAMPLE, RAW, SEED, write_parquet  # noqa: E402
+from museum_map.common import INTERIM, N_SAMPLE, RAW, SEED, write_parquet  # noqa: E402
 
 OVERSAMPLE = 3
 FLOOR = 10

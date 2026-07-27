@@ -31,10 +31,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from build.common import FULL_INTERIM, LEAD_SHARDS, fmt_eta, select_leads  # noqa: E402
-from probe.common import RAW, write_parquet  # noqa: E402
-from probe.textproc import normalize_ws  # noqa: E402
-from probe.wiki import EXTRACT_BATCH, fetch_leads_many  # noqa: E402
+from pipeline.common import FULL_INTERIM, LEAD_SHARDS, fmt_eta, select_leads  # noqa: E402
+from museum_map.common import RAW, write_parquet  # noqa: E402
+from museum_map.textproc import normalize_ws  # noqa: E402
+from museum_map.wiki import EXTRACT_BATCH, fetch_leads_many  # noqa: E402
 
 
 def shard_paths(dbname: str) -> tuple[Path, Path]:

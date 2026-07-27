@@ -1,153 +1,110 @@
-# museum-map — embedding-space probe
+# museum-map
 
-A go/no-go experiment, not a product. **Question:** if you embed the Wikipedia
-lead of every museum in the world, is the resulting space just a restatement of
-*country* and *museum type*? If so, a semantic map of museums has no subject —
-a choropleth with a type filter would carry the same information.
+A semantic map of every museum in the world that has a Wikipedia article —
+**49,218 museums in 183 languages**, placed by what their article says about
+them, with regions named at four zoom levels.
 
-Output: `reports/report.md` plus scatter figures in `reports/figs/`.
+The question behind it: is such a map a real thing, or is it just a choropleth
+with a type filter? The answer is in [`FINDINGS.md`](FINDINGS.md). The short
+version: **64% of these museums carry no museum type in Wikidata beyond the
+generic "museum", and the map gives 17,697 of them a subject anyway.** The
+Heritage Railways region contains 847 museums the structured data calls nothing
+more specific than "museum". The text knows what they are about; the metadata
+does not.
 
-## Result
-
-Tested with **two encoders** (`multilingual-e5-large` and `BAAI/bge-m3`), which
-turned out to matter more than anything else.
-
-### What replicates across both
-
-- The map is **not** a restatement of country (ARI +0.076 / +0.016) or of museum
-  type (−0.004 / −0.003). Neither is the organising axis.
-- **Museum type is real, recoverable content.** The probe on specifically-typed
-  museums reaches 0.54–0.57 against a 0.266 baseline. The project has a subject.
-- **Geography is a gradient, not a partition** — which is why the country ARI
-  missed it. It decomposes into a steep local effect that dies by ~1,000 km
-  (+0.21 above mean similarity under 1 km, at the permutation null past
-  ~3,000 km) and a flat national offset that never decays. Mantel r −0.116 /
-  −0.119; the two encoders agree to within noise.
-- That yields a **local↔universal axis** — median distance to a museum's 10
-  nearest neighbours — which recovers the same unprompted ordering under both
-  encoders: local, ethnographic and archaeological museums at one end; military,
-  railway and natural-history at the other. Local-history museums are *about*
-  their locality; wars, trains and dinosaurs are globally shared subject matter.
-
-### What turned out to be an encoder artefact
-
-The first run, on e5-large alone, found article **language** dominating
-everything at ARI **+0.769** — an artefact of the "longest article across
-languages" sampling rule. That conclusion does not survive the second encoder:
-
-| | e5-large | BGE-M3 |
-|---|---|---|
-| language ARI, raw | **+0.769** | **+0.017** |
-| language 10-NN purity, raw | 0.708 | 0.261 |
-| cross-lingual retrieval P@1, raw | 0.854 | **0.941** |
-| type-specific probe, raw | 0.274 | **0.513** |
-
-**BGE-M3's space is already language-neutral** — it is trained for cross-lingual
-alignment, and it shows. Type is recoverable in its raw space without any
-correction at all, where e5 needed the language axis removed first to see it.
-
-**So: use BGE-M3.** Per-language centring (`probe/debias.py:centered`) still adds
-a little on top — cross-lingual P@1 0.941 → 0.966, language ARI +0.017 → −0.010 —
-but it is no longer load-bearing. Under e5 it was the difference between a map of
-Wikipedia language editions and a map of museums.
-
-The centring transform is validated against ground truth rather than against a
-clustering metric: 1,113 museums have articles in ≥2 languages, and the same
-institution described twice should retrieve itself across languages. Judging a
-de-biasing transform by "did language ARI fall" is circular.
-
-Geography is deliberately **not** centred out. Language was a corpus artefact and
-parallel articles gave an oracle to confirm the removal took the artefact rather
-than the content. Location is constitutive of what a museum is, and there is no
-"same museum, different place" to validate against.
-
-Honest caveat on both encoders: post-centring HDBSCAN noise is ~40%, so the space
-is smooth rather than clumpy. That is a description, not a problem — see
-`NOTES.md`.
-
-## Run
+## Run it
 
 ```bash
 uv sync
-./run_all.sh
-# or a different encoder:
-MODEL=BAAI/bge-m3 ./run_all.sh
+
+# 1. Fetch the corpus (network, ~2 h). Watch the logs; never pipe through tail.
+uv run python -u pipeline/p01_harvest.py   > logs/p01_harvest.log 2>&1
+uv run python -u pipeline/p02_sitelinks.py > logs/p02_sitelinks.log 2>&1
+nohup uv run python -u pipeline/p03_leads.py --workers 4 > logs/p03_leads.log 2>&1 &
+
+# 2. Build the map (compute, ~2 h at full scale)
+./run.sh fixture    # 2,000 museums, ~10 min — iterate here first
+./run.sh full       # all 49,218
 ```
 
-Every HTTP response (SPARQL, Wikipedia, Wikibase) is cached to `data/cache/`
-keyed by a hash of the full request, so reruns are free and the experiment
-reproduces offline once the cache is warm. `random_state=42` throughout,
-including UMAP.
+Needs `ANTHROPIC_API_KEY` for region naming (~1,300 Haiku calls, roughly $5–8 at
+full scale). Everything is resumable: HTTP responses are cached by request hash,
+leads are written as per-wiki shards, embeddings checkpoint every 5,000 rows.
 
-## Pipeline
+Output is a single self-contained `reports/map_<corpus>_<tag>.html` — pan, zoom,
+search, and click a point to open its Wikipedia article.
+
+## Layout
+
+| | |
+|---|---|
+| `museum_map/` | shared library: paths, cached/throttled HTTP, text processing, the centring transform |
+| `pipeline/` | **the project.** p01–p05 build the corpus, p10–p14 build and analyse the map |
+| `probe/` | historical. The go/no-go experiment that preceded the build — see below |
+| `FINDINGS.md` | what the finished map shows |
+| `reports/` | generated maps (gitignored — regenerable, and the full one is ~14 MB) |
+| `data/` | everything fetched and computed (gitignored) |
+
+### The pipeline
 
 | stage | does | writes |
 |---|---|---|
-| `s01_harvest` | every museum in Wikidata with ≥1 sitelink | `data/raw/museums.parquet` |
-| `s02_sample` | sqrt-of-population allocation per country, oversampled | `data/interim/candidates.parquet` |
-| `s03_sitelinks` | resolve real Wikipedia articles per candidate | `data/interim/sitelinks.parquet` |
-| `s04_finalize` | exact 2,000; assign one type label each | `data/interim/sample.parquet` |
-| `s05_leads` | longest lead across all languages | `data/interim/leads{,_all}.parquet` |
-| `s06_variants` | the three text variants | `data/interim/variants.parquet` |
-| `s07_embed` | multilingual encoder, 3 × 2,000 vectors | `data/processed/emb_*.npy` |
-| `s08_analyze` | UMAP + HDBSCAN + metrics | `data/processed/metrics_*.json` |
-| `s10_parallel` | cross-lingual retrieval on same-museum article pairs; raw vs centered vs INLP | `data/processed/parallel_*.json` |
-| `s11_geography` | distance-decay curve vs a permutation null; local↔universal radius per museum | `data/processed/geo_*.json`, `geo_scores_*.parquet` |
-| `s09_report` | figures + markdown (runs last) | `reports/` |
+| `p01_harvest` | every museum in Wikidata with ≥1 sitelink | `data/raw/museums.parquet` |
+| `p02_sitelinks` | resolve real Wikipedia articles for all 55,280 | `data/interim/full/sitelinks.parquet` |
+| `p03_leads` | fetch every article's lead, pick one per museum | `data/interim/full/leads{,_all}.parquet` |
+| `p04_types` | one museum type per museum, from its P31s | `data/interim/full/types.parquet` |
+| `p05_fixture` | 2,000-museum sample for fast iteration | `data/interim/fixture_leads.parquet` |
+| `p10_embed` | BGE-M3, sequence capped at 2,048 tokens | `data/processed/map_<corpus>/emb.npy` |
+| `p11_layout` | per-language centring → UMAP 2D | `coords.parquet` |
+| `p12_topics` | Toponymy region names, all layers | `topics_<tag>.parquet` |
+| `p13_map` | datamapplot interactive HTML | `reports/map_<corpus>_<tag>.html` |
+| `p14_analyze` | is the map just country/type/language? | `analysis_<tag>.json` |
+
+Every map stage takes `--corpus fixture|full` and is otherwise identical between
+the two, so nothing validated on the fixture can silently diverge on the real run.
 
 ## Decisions worth knowing
 
 **Museum definition.** `wdt:P31/wdt:P279* wd:Q33506` — the transitive form. The
 Louvre is an instance of *art museum*, not of *museum*, so a plain `P31` match
-misses it (verified: `ASK { wd:Q19675 wdt:P31 wd:Q33506 }` → false).
+misses it.
 
-**Why the harvest is partitioned by type.** WDQS gives a query ~60s. An
-unpartitioned paged query times out (`GROUP BY` + deep `OFFSET` forces a full
-sort of ~81k rows); partitioning by country works but re-walks the `P279*`
-closure ~200 times; inlining the 371 subclasses as `VALUES` is worse still.
-Resolving the closure once and issuing one plain `wdt:P31` lookup per type, with
-no `ORDER BY` and no `OFFSET`, returns even the largest bucket (Q33506, 32.5k
-rows) in ~38s. Partitions that hit the row cap split recursively over QID ranges.
+**Which article represents a museum.** The lead comes from an official language
+of the museum's country when that article is at least half as long as the longest
+available; otherwise the longest wins. Plain longest-wins left 30.4% of museums
+that *have* a local-language article represented by another one. The confound is
+not language — BGE-M3 is cross-lingually aligned — but **perspective**: the
+Spanish article on the Seoul Museum of Art leads with a Joseon royal palace, the
+Korean one with its status as a bureau of the city government. Always preferring
+the local article overcorrects, pushing sub-200-character leads from 18.4% to
+23.7%.
 
-**Stratification.** Allocation ∝ `sqrt(n_country)`: flattens the head
-(Italy/Germany/US ≈ 30% of all museums) without giving Vatican City the same
-weight as Germany.
+**BGE-M3, not multilingual-e5-large.** Under e5, article language dominated
+everything at ARI +0.769 and buried the actual content. BGE-M3 sits at +0.017.
+This is the probe's single most valuable result.
 
-**Longest lead, any language.** Length is measured in characters, which is not
-script-neutral — CJK articles are systematically under-selected. The chosen
-language is stored with the text and reported.
+**Geography is kept, not centred out.** Language entered through a sampling rule
+and parallel articles gave an oracle to confirm its removal took the artefact
+rather than the content. Location is constitutive — a local-history museum in
+Bavaria *is* about Bavaria — and there is no "same museum, different place" to
+validate a removal against.
 
-**Variant (c).** Locations are removed with a per-museum gazetteer (every label
-and alias, in every language, of the country and the full `P131` containment
-chain, plus `P1549` demonyms) *and* spaCy `xx_ent_wiki_sm` LOC spans. The NER
-also tags institution names as `LOC`, so (c) removes much of the museum's own
-name too; the report measures how often.
+**Per-language centring uses leave-one-out with shrinkage.** 40 of the 183
+languages have exactly one museum; plain centring maps a singleton group onto the
+origin, manufacturing a dense fake cluster at the centre of the map.
 
-**Metrics.** ARI against country and type is reported as asked, but it compares
-partitions and is penalised when ~30 clusters meet ~200 countries. 10-NN label
-purity (against `sum p_i^2` chance) and a cross-validated linear probe (against
-the majority baseline) are reported next to it — those answer "is the
-neighbourhood geographic?" without a clustering step in between.
+## The probe
 
-**Judging the language fix.** "Language ARI dropped" cannot validate a
-de-biasing transform — subtract the language means and the clusters loosen by
-construction. `s10_parallel` uses museums that have articles in several
-languages as ground truth instead: if the representation is language-neutral,
-the same museum's German and Japanese articles should retrieve each other. That
-verdict is independent of any clustering metric. It is also split by whether the
-museum's name literally appears in both texts, to rule out string matching.
+`probe/` holds the go/no-go experiment that ran before any of this: on a
+2,000-museum stratified sample, is the embedding space just a restatement of
+country and type? It said no, and it is why the pipeline uses BGE-M3 and keeps
+geography. Its reports are in `probe/reports/`.
 
-**Two labels added after the first run,** because the numbers as first specified
-could not be interpreted:
-- *language of the lead*, without which the country signal is unattributable
-  (and which turned out to dominate everything).
-- *type among specifically-typed museums only*. 62% of the sample carries just
-  the generic `museum` P31, so the all-museums type probe scores exactly the
-  majority baseline — that reads as "no signal" no matter what the embedding
-  contains.
+It is **not** part of building the map and does not need to be run. Two of its
+conclusions did not survive full scale — the stratified sample understated the
+geographic signal by 2.7×, and its stub-quality finding reversed sign — both
+documented in `FINDINGS.md`.
 
-**Figures.** Only four hues of the categorical palette clear the all-pairs
-CVD/normal-vision floors that a scatter demands, so the primary figure per
-variant is a small-multiple grid (all points grey, one category highlighted per
-panel) where colour carries no identity. The literal single-panel coloured
-scatter is emitted alongside it.
+```bash
+./probe/run_probe.sh    # needs data/raw/museums.parquet from p01_harvest
+```

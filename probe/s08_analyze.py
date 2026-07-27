@@ -49,8 +49,8 @@ from sklearn.neighbors import NearestNeighbors
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from probe.common import INTERIM, PROCESSED, SEED  # noqa: E402
-from probe.debias import centered  # noqa: E402
+from museum_map.common import INTERIM, PROCESSED, SEED  # noqa: E402
+from museum_map.debias import centered  # noqa: E402
 
 VARIANTS = ["a_full", "b_nofirst", "c_noloc"]
 K_NN = 10
