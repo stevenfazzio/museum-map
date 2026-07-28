@@ -57,6 +57,59 @@ The 21-region layer below it is where the map is most readable:
 Geography appears as a modifier on subject ("Japanese Prefectural Art and
 Heritage"), never as the top-level split.
 
+## The verdict survives closing the corpus's largest known bias
+
+The numbers above are measured on a corpus defined by `wdt:P31/wdt:P279*
+wd:Q33506`, which misses 5,560 museums that Wikidata types as houses and
+buildings — 24% of US museums, against 2% for Italy and Japan (`COVERAGE.md`).
+That is not a neutral omission: it is a systematic hole in one country, and the
+obvious worry is that "the map is not a restatement of country" holds only
+because the corpus under-samples its largest country.
+
+So the map was rebuilt with those museums added — `full_recovered`, 54,778
+museums — and every metric on this page recomputed. The added set is **31.5% US
+against the corpus's 10.3%** and **44% English-lead against 20.3%**, so it pushes
+hard in exactly the direction that should break the finding.
+
+**It does not move.**
+
+| ARI vs country | full | full_recovered |
+|---|---|---|
+| layer 0 (984 / 1,085 regions) | +0.002 | **+0.002** |
+| layer 1 | +0.002 | +0.004 |
+| layer 2 | +0.005 | +0.005 |
+| layer 3 | +0.009 | +0.010 |
+| layer 4 (coarsest) | +0.013 | +0.011 |
+
+Every delta is within ±0.002. Language ARI moves slightly *negative* at every
+layer. The type probe is 0.655 → 0.656 on an identical 17,653 specifically-typed
+museums, and the local/universal ratio 0.14x → 0.13x.
+
+10-NN purity needs reading as lift over chance, because adding a US-heavy set
+raises the chance baseline mechanically:
+
+| 10-NN purity | full | full_recovered |
+|---|---|---|
+| country | 0.435 = 10.6x chance | 0.446 = **10.2x** chance |
+| language | 0.470 = 5.9x chance | 0.488 = **5.6x** chance |
+| type | 0.465 = 1.5x chance | 0.433 = **1.6x** chance |
+
+Country purity's raw rise is entirely the chance baseline moving from 0.041 to
+0.044. Controlled for composition, geographic determinism goes *down*.
+
+The recovered museums arrive as subject regions, not geographic ones —
+`Railway Museums and Heritage Depots`, `Historic Steam-Powered Vessels`,
+`National Park Service Visitor Centers`. 1,752 new US museums, overwhelmingly
+historic house museums, were absorbed by what they are about.
+
+This is a stronger claim than the original run supports. The verdict was not
+merely unchallenged; it survived a directed attempt to break it using the
+corpus's own worst bias.
+
+`full_recovered` is a parallel corpus (`--corpus full_recovered`), built by
+`data/interim/gap/` + a recovery stage. `map_full` is never written by it, so
+every number elsewhere on this page still describes the artifact it names.
+
 ## The map recovers subject matter that Wikidata does not record
 
 This is the strongest argument that the map carries information a choropleth with
@@ -66,6 +119,12 @@ a type filter could not.
 no museum type at all.** Of those, **14,500 land inside a *named* region at the
 21-region layer** — the map assigns a subject to them that their metadata does
 not have.
+
+That figure understates the problem, because the corpus is itself selected on
+Wikidata having typed a museum as a museum. Add back the 5,560 it misses — none
+of which carries any museum type, definitionally — and it is **67.8% (37,125 of
+54,778)**. The metadata is poorer than this page's headline number suggests, and
+the text carries correspondingly more of the load.
 
 | region | museums | of which Wikidata types generically |
 |---|---|---|
@@ -166,6 +225,13 @@ dispersed.
 The likely reason the fixture said otherwise: at 2,000 museums the stubs are
 sparse and scatter into noise, while at 49,218 there are enough of them to form
 their own dense, nameable regions. Scale changed the answer.
+
+It replicates a second time on `full_recovered`, whose stub tail is larger
+(8,397 museums under 150 chars against 7,869) and differently composed: 55.4%
+unlabelled for the shortest band against 57.4% for the longest, radius still
+climbing monotonically 523 → 925 km. A correction that holds on two corpora with
+different composition is worth more than one that holds on the corpus it was
+derived from.
 
 **The unlabelled fraction is higher at scale** — 56.9% at the finest layer
 against 41.4% on the fixture — but it is not the stubs causing it, and it is not

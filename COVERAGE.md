@@ -95,10 +95,13 @@ museum is listed on the National Register of Historic Places, acquires
 `instance of: house` plus a heritage designation, and no editor adds the museum
 claim. Italian and Japanese museums are typed as museums.
 
-One consequence for `FINDINGS.md`: the corpus under-represents the United States
-by a quarter, so any statement about the map's geographic distribution is
-measured on a corpus whose largest single country is the one most affected by
-this bias.
+This under-represents the United States by a quarter, which is the corpus's
+largest known bias and the obvious threat to FINDINGS.md's "not a choropleth"
+verdict. That was tested rather than left as a caveat: the map was rebuilt as
+`full_recovered` (54,778 museums) and every metric recomputed. Country ARI does
+not move at any layer — +0.002 at the finest, every delta within +/-0.002 — and
+10-NN country purity falls slightly once the chance baseline is controlled for.
+See FINDINGS.md.
 
 ## Method
 
@@ -188,6 +191,11 @@ GET is fine until Cyrillic, Arabic and Georgian percent-encode to 6–9 bytes pe
 character; ru, uk, bg, ar, arz, he, hy and ka all died on `414 URI Too Long`
 while every Latin-script wiki passed. Fixed by switching to POST.
 
+**"The recovered museums will skew short-lead" is false.** It was inferred from
+their median sitelink count of 2, and used to argue the lead-vs-full-text
+question should be settled first. Their median lead is 465 characters against the
+corpus's 394 — longer at every percentile.
+
 **"Smaller editing communities type museums worse" is false.** It was the stated
 reason for treating English and German as the optimistic end. Italy sits at 2%,
 Japan 2%, Poland 4%, Russia 5%, against 24% for the United States. The gap tracks
@@ -210,9 +218,13 @@ the estimator; both are reported above.
 
 ## Integration
 
-**Decided: not yet.** This is a measurement, not a pipeline change. Nothing under
-`data/processed/` or `reports/` has been touched, so `FINDINGS.md` still describes
-the artifact that exists.
+**Decided: not yet, for the map itself.** `map_full` and `reports/` are
+untouched, so FINDINGS.md still describes the artifact it names.
+
+A *parallel* corpus does exist: `--corpus full_recovered` (54,778 museums), built
+to test whether the gap changes FINDINGS.md's conclusions. It does not. That
+experiment is the reason to be relaxed about deferring integration -- the map is
+not currently telling a different story than it would with the gap closed.
 
 The reason to defer is that adding these museums is not additive. `p10` is
 per-row fingerprinted so only new rows embed, but `p11` UMAP, `p12` Toponymy and
@@ -221,12 +233,11 @@ change. A 11.3% corpus change concentrated in one country and one museum type
 will move the map, not extend it — and `FINDINGS.md`'s numbers would stop
 matching the map they describe.
 
-The recovered museums are also systematically thinner than the corpus. On a
-sample of 300: 77% have coordinates, 88% a country, 83% an English label, and the
-**median sitelink count is 2**. They are small local institutions, so they will
-skew short-lead — and 24% of current leads are already under 200 characters. That
-interacts with the open question of whether lead-only text is the right input at
-all, which should be settled first.
+The recovered museums are thinner in *metadata* — 79% have coordinates, 83% an
+English label, median sitelink count 2 — but not in prose. Their median lead is
+**465 characters against the corpus's 394**, and only 15.3% fall under 200
+characters against 23.9%. Few sitelinks does not mean a short article, which was
+a prediction worth recording as wrong.
 
 When it happens, the shape is a new stage rather than a change to `p01`:
 `p01_harvest` stays a faithful Wikidata query, a recovery stage reads

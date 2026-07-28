@@ -25,7 +25,7 @@ for _d in (FULL_INTERIM, FULL_PROCESSED, LEAD_SHARDS):
     _d.mkdir(parents=True, exist_ok=True)
 
 
-CORPORA = ("fixture", "full")
+CORPORA = ("fixture", "full", "full_recovered")
 
 
 def corpus_paths(name: str) -> tuple[Path, Path]:
@@ -36,11 +36,19 @@ def corpus_paths(name: str) -> tuple[Path, Path]:
     map stage takes `--corpus` and is otherwise identical between the two, so
     nothing can be validated on the fixture and then silently diverge on the real
     run.
+
+    `full_recovered` is `full` plus the 5,560 museums Wikidata does not type as
+    museums (see COVERAGE.md). It exists so the map can be built both ways and
+    the metrics compared — the question is whether the corpus's blind spot,
+    which is 24% of US museums, changes what p14 concludes. It is a parallel
+    corpus, not a replacement: `full` is never written by building it.
     """
     if name not in CORPORA:
         raise SystemExit(f"unknown corpus {name!r}; expected one of {CORPORA}")
     if name == "full":
         leads = FULL_INTERIM / "leads.parquet"
+    elif name == "full_recovered":
+        leads = INTERIM / "full_recovered" / "leads.parquet"
     else:
         # The fixture is a random sample of the finished corpus, built by p05.
         # It deliberately does not reuse the probe stratified sample.
