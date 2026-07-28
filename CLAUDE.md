@@ -10,7 +10,16 @@ A semantic map of 49,218 museums built from their Wikipedia leads. Read
   `pipeline/`; do not extend it, and do not assume its numbers still hold — two
   of its conclusions were overturned at full scale (see `FINDINGS.md`).
 - Names are meant literally now. If you find yourself explaining that a directory
-  isn't what it sounds like, rename it instead.
+  isn't what it sounds like, rename it instead. The one strained name is `full`:
+  it is *not* the fullest corpus, it is the museums Wikidata types as museums.
+  `full_recovered` is the whole thing and is what ships. `full` is kept only
+  because FINDINGS.md's sensitivity comparison is measured against it, and `p08`
+  never writes over it.
+- Two corpora, two channels. `p01` trusts Wikidata's `P31`; `p07` trusts the
+  prose in each wiki's museum category tree, and finds 5,560 museums `p01`
+  cannot. `p07` is hours and ~$27, so it is not in `run.sh` — its output
+  (`data/interim/gap/in_scope_qids.json`) is stable and only changes as
+  Wikidata's typing does.
 - The fixture (`--corpus fixture`) is for checking that a stage runs, not for
   measuring anything. Distributional properties transfer; neighbourhood ones
   cannot, because a 4% sample removes 96% of every museum's nearest neighbours.

@@ -1,13 +1,13 @@
 # museum-map
 
-A semantic map of every museum Wikidata types as a museum and that has a
-Wikipedia article — **49,218 museums in 183 languages**, placed by what their
-article says about them, with regions named at four zoom levels.
+A semantic map of every museum in the world that has a Wikipedia article —
+**54,778 museums in 158 languages**, placed by what their article says about
+them, with regions named at four zoom levels.
 
-That first clause is load-bearing. A further **5,560 museums have a Wikipedia
-article and are absent from the corpus**, because Wikidata calls them houses and
-buildings rather than museums — 11.3% more, concentrated in the United States at
-24%. They are measured but deliberately not added; see
+Getting to "every" took two channels. Wikidata types 49,218 of them as museums.
+It types another **5,560 as houses and buildings** — 24% of US museums, because
+an NRHP listing gets `instance of: house` and nobody adds the museum claim — and
+those are recovered from the wikis' own museum category trees. See
 [`COVERAGE.md`](COVERAGE.md).
 
 The question behind it: is such a map a real thing, or is it just a choropleth
@@ -29,8 +29,16 @@ uv run python -u pipeline/p02_sitelinks.py > logs/p02_sitelinks.log 2>&1
 nohup uv run python -u pipeline/p03_leads.py --workers 4 > logs/p03_leads.log 2>&1 &
 
 # 2. Build the map (compute, ~2 h at full scale)
-./run.sh fixture    # 2,000 museums, ~10 min — iterate here first
-./run.sh full       # all 49,218
+./run.sh fixture          # 2,000 museums, ~10 min — iterate here first
+./run.sh full_recovered   # all 54,778 — the real map
+./run.sh full             # 49,218, Wikidata-typed only (the baseline)
+```
+
+The two extra corpus stages, needed once for `full_recovered`:
+
+```bash
+uv run python -u pipeline/p07_gap.py     > logs/p07_gap.log 2>&1   # hours, ~$27
+uv run python -u pipeline/p08_recover.py > logs/p08_recover.log 2>&1
 ```
 
 Needs `ANTHROPIC_API_KEY` for region naming (~1,300 Haiku calls, roughly $5–8 at
@@ -38,7 +46,8 @@ full scale). Everything is resumable: HTTP responses are cached by request hash,
 leads are written as per-wiki shards, embeddings checkpoint every 5,000 rows.
 
 Output is a single self-contained `reports/map_<corpus>_<tag>.html` — pan, zoom,
-search, and click a point to open its Wikipedia article.
+search, and click a point to open its Wikipedia article. The map is
+`reports/map_full_recovered_short.html`.
 
 ## Layout
 
@@ -56,27 +65,34 @@ search, and click a point to open its Wikipedia article.
 
 | stage | does | writes |
 |---|---|---|
-| `p01_harvest` | every museum in Wikidata with ≥1 sitelink | `data/raw/museums.parquet` |
+| `p01_harvest` | every museum Wikidata *types* as one, with ≥1 sitelink | `data/raw/museums.parquet` |
 | `p02_sitelinks` | resolve real Wikipedia articles for all 55,280 | `data/interim/full/sitelinks.parquet` |
 | `p03_leads` | fetch every article's lead, pick one per museum | `data/interim/full/leads{,_all}.parquet` |
 | `p04_types` | one museum type per museum, from its P31s | `data/interim/full/types.parquet` |
 | `p05_fixture` | 2,000-museum sample for fast iteration | `data/interim/fixture_leads.parquet` |
+| `p07_gap` | museums Wikidata does not type as museums | `data/interim/gap/in_scope_qids.json` |
+| `p08_recover` | fetch those, union into a corpus | `data/interim/full_recovered/leads.parquet` |
 | `p10_embed` | BGE-M3, sequence capped at 2,048 tokens | `data/processed/map_<corpus>/emb.npy` |
 | `p11_layout` | per-language centring → UMAP 2D | `coords.parquet` |
 | `p12_topics` | Toponymy region names, all layers | `topics_<tag>.parquet` |
 | `p13_map` | datamapplot interactive HTML | `reports/map_<corpus>_<tag>.html` |
 | `p14_analyze` | is the map just country/type/language? | `analysis_<tag>.json` |
 
-Every map stage takes `--corpus fixture|full` and is otherwise identical between
-the two, so nothing validated on the fixture can silently diverge on the real run.
+Every map stage takes `--corpus fixture|full|full_recovered` and is otherwise
+identical between them, so nothing validated on the fixture can silently diverge
+on the real run — and `full` stays buildable on its own as the baseline
+FINDINGS.md's sensitivity comparison is measured against.
 
 ## Decisions worth knowing
 
-**Museum definition.** `wdt:P31/wdt:P279* wd:Q33506` — the transitive form. The
-Louvre is an instance of *art museum*, not of *museum*, so a plain `P31` match
-misses it. It still misses 5,560 museums that Wikidata types as houses and
-buildings with no museum claim at all; `p01` is the one stage that trusts `P31`
-completely, and [`COVERAGE.md`](COVERAGE.md) measures what that costs.
+**Museum definition — two channels, because one is not enough.**
+`wdt:P31/wdt:P279* wd:Q33506` is the transitive form: the Louvre is an instance
+of *art museum*, not of *museum*, so a plain `P31` match misses it. But the
+transitive form still misses 5,560 museums Wikidata types as houses and
+buildings with no museum claim at all, so `p07` adds a second channel — the
+wikis' own museum category trees, with each article's text judged on whether it
+describes a museum. `p01` trusts `P31`; `p07` trusts the prose.
+[`COVERAGE.md`](COVERAGE.md) measures the gap between them.
 
 **Which article represents a museum.** The lead comes from an official language
 of the museum's country when that article is at least half as long as the longest
@@ -98,7 +114,7 @@ rather than the content. Location is constitutive — a local-history museum in
 Bavaria *is* about Bavaria — and there is no "same museum, different place" to
 validate a removal against.
 
-**Per-language centring uses leave-one-out with shrinkage.** 40 of the 183
+**Per-language centring uses leave-one-out with shrinkage.** 28 of the 158
 languages have exactly one museum; plain centring maps a singleton group onto the
 origin, manufacturing a dense fake cluster at the centre of the map.
 

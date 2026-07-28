@@ -218,13 +218,21 @@ the estimator; both are reported above.
 
 ## Integration
 
-**Decided: not yet, for the map itself.** `map_full` and `reports/` are
-untouched, so FINDINGS.md still describes the artifact it names.
+**Done.** The 5,560 are in the map: `--corpus full_recovered`, 54,778 museums,
+`reports/map_full_recovered_short.html`. Two stages build them — `p07_gap`
+(crawl and classify, hours and ~$27) and `p08_recover` (fetch and union) — so the
+corpus is reproducible from a clean clone rather than resting on a one-off
+analysis.
 
-A *parallel* corpus does exist: `--corpus full_recovered` (54,778 museums), built
-to test whether the gap changes FINDINGS.md's conclusions. It does not. That
-experiment is the reason to be relaxed about deferring integration -- the map is
-not currently telling a different story than it would with the gap closed.
+Integration waited on the sensitivity experiment rather than on nerve. Adding
+these museums is not additive: `p11` UMAP, `p12` Toponymy and `p13` are full
+recomputes, every point moves, and the region names change. Doing that before
+knowing whether the conclusions survived would have meant rebuilding the
+artifact FINDINGS.md describes without knowing whether FINDINGS.md would still
+be true. It is (see FINDINGS.md), so the rebuild was safe to do.
+
+`full` is deliberately still buildable on its own. It is the baseline the
+comparison is measured against; `p08` never writes over it.
 
 The reason to defer is that adding these museums is not additive. `p10` is
 per-row fingerprinted so only new rows embed, but `p11` UMAP, `p12` Toponymy and

@@ -3,10 +3,17 @@
 The probe asked a go/no-go question on 2,000 museums: is the embedding space of
 museum Wikipedia leads just a restatement of country and type? It said no, and
 that type is real recoverable content. This is the same set of questions asked of
-the built map, on **49,218 museums in 158 languages** — every museum in Wikidata
-with a Wikipedia article.
+the built map.
 
-Map: `reports/map_full_short.html`. Numbers: `data/processed/map_full/analysis_short.json`.
+Every number on this page is measured on the `full` corpus — **49,218 museums in
+158 languages**, every museum Wikidata *types* as a museum. The map that ships is
+`full_recovered` (54,778), which adds the 5,560 museums Wikidata types as houses
+and buildings; the section *The verdict survives closing the corpus's largest
+known bias* recomputes all of this against it and finds no material difference.
+
+Numbers: `data/processed/map_full/analysis_short.json`.
+Maps: `reports/map_full_recovered_short.html` (shipped),
+`reports/map_full_short.html` (the baseline these numbers describe).
 
 ## The headline
 
@@ -106,9 +113,11 @@ This is a stronger claim than the original run supports. The verdict was not
 merely unchallenged; it survived a directed attempt to break it using the
 corpus's own worst bias.
 
-`full_recovered` is a parallel corpus (`--corpus full_recovered`), built by
-`data/interim/gap/` + a recovery stage. `map_full` is never written by it, so
-every number elsewhere on this page still describes the artifact it names.
+`full_recovered` is now the map that ships
+(`reports/map_full_recovered_short.html`), built by `p07_gap` + `p08_recover`.
+`full` is kept buildable on its own as the baseline this comparison is measured
+against, and `p08` never writes over it — so every other number on this page
+still describes `map_full_short.html`, the artifact it was computed on.
 
 ## The map recovers subject matter that Wikidata does not record
 
@@ -201,6 +210,25 @@ This is after per-language leave-one-out centring with shrinkage, which is still
 warranted: **30 of the 158 languages have exactly one museum**, and plain
 per-language centring maps a singleton group onto the origin, manufacturing a
 dense fake cluster at the centre of the map.
+
+## What the shipped map is
+
+Every number above is computed on `full` (49,218), which is the corpus this
+analysis was run against. The map that ships is `full_recovered` (54,778) — the
+section above shows the two agree wherever it matters. Its Toponymy layers, for
+the record:
+
+| layer | regions | Unlabelled |
+|---|---|---|
+| 0 (finest) | 958 | 55.3% |
+| 1 | 268 | 52.8% |
+| 2 | 83 | 45.9% |
+| 3 | 22 | 45.8% |
+| 4 (coarsest) | 6 | 45.7% |
+
+`Unlabelled` is the unnamed gap between named regions at that zoom, recomputed
+per layer; it is kept on purpose. 55.3% at the finest layer describes a smooth
+space, not a defect.
 
 ## Corrections
 
