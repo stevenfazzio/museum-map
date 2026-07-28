@@ -1,6 +1,6 @@
 """Build 11 — per-language centring, then UMAP to the 2D map plane.
 
-Centring uses leave-one-out means shrunk toward the global mean (`probe/debias.py`).
+Centring uses leave-one-out means shrunk toward the global mean.
 Plain per-language centring is not usable here: at fixture scale 28 of 104
 languages have exactly one museum, and subtracting a singleton group's mean from
 its only member puts that point exactly on the origin — manufacturing a dense

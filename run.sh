@@ -42,6 +42,13 @@ case "$CORPUS" in
   *)              run pipeline/p05_fixture.py ;;
 esac
 
+# p09 is the only network stage in here — ~10 min cold for the full corpus, then
+# seconds, because every response is cached by request hash. It runs first so a
+# WDQS outage fails the build in the first minute rather than after two hours of
+# embedding and clustering. Nothing downstream depends on it: p13 renders a
+# correct map without facts.parquet and says so.
+run pipeline/p09_facts.py   --corpus "$CORPUS"
+
 run pipeline/p10_embed.py   --corpus "$CORPUS"
 run pipeline/p11_layout.py  --corpus "$CORPUS"
 run pipeline/p12_topics.py  --corpus "$CORPUS" --llm-model "$LLM_MODEL" --tag "$TAG"

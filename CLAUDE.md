@@ -1,20 +1,23 @@
 # Working in this repo
 
-A semantic map of 49,218 museums built from their Wikipedia leads. Read
-`README.md` for what it is and `FINDINGS.md` for what it found.
+A semantic map of 54,778 museums built from their Wikipedia leads, for exploring
+museums by what they are about and finding ones like a given one. Read
+`README.md` for what it is and `FINDINGS.md` for what it shows.
 
 ## Orientation
 
 - `pipeline/` is the project. `museum_map/` is the library it imports.
-- `probe/` is a historical experiment. It is not a dependency of anything in
-  `pipeline/`; do not extend it, and do not assume its numbers still hold — two
-  of its conclusions were overturned at full scale (see `FINDINGS.md`).
-- Names are meant literally now. If you find yourself explaining that a directory
+- Names are meant literally. If you find yourself explaining that a directory
   isn't what it sounds like, rename it instead. The one strained name is `full`:
   it is *not* the fullest corpus, it is the museums Wikidata types as museums.
-  `full_recovered` is the whole thing and is what ships. `full` is kept only
-  because FINDINGS.md's sensitivity comparison is measured against it, and `p08`
-  never writes over it.
+  `full_recovered` is the whole thing and is what ships. `full` is a real
+  intermediate — `p07` and `p08` read its leads as their input — and `p08` never
+  writes over it.
+- The prose describes the map, it does not defend it. A go/no-go check ran before
+  the build, and its framing leaked into the docs until it read as the project's
+  reason for existing. Do not restore that: features are worth having because
+  they are useful, not because they are evidence. If a comment justifies a choice
+  by citing FINDINGS, it is probably the wrong comment.
 - Two corpora, two channels. `p01` trusts Wikidata's `P31`; `p07` trusts the
   prose in each wiki's museum category tree, and finds 5,560 museums `p01`
   cannot. `p07` is hours and ~$27, so it is not in `run.sh` — its output
@@ -24,6 +27,15 @@ A semantic map of 49,218 museums built from their Wikipedia leads. Read
   measuring anything. Distributional properties transfer; neighbourhood ones
   cannot, because a 4% sample removes 96% of every museum's nearest neighbours.
   See the caveat in `pipeline/p05_fixture.py`.
+- **Metadata coverage is not evenly distributed, and the map must not draw it as
+  if it were.** A census of all 2,296 `wdt:` properties over the corpus found
+  seven above 50%, and every one of them is sparser on the 5,560 recovered
+  museums than on the typed ones — official website 28.1% against 61.2% — except
+  heritage designation, which inverts. So point size uses `sitelink_count`, the
+  one field with no such skew (mean 3.50 against 3.59, zero nulls), and anything
+  sparser goes in the palette control as buckets with an explicit `not recorded`
+  colour. A continuous ramp over a sparse field draws how thorough a country's
+  editors have been and reads as geography. `p09_facts.py` has the numbers.
 
 ## Data safety
 

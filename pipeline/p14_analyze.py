@@ -1,11 +1,8 @@
-"""Build 14 — does the probe's verdict survive at full scale?
+"""Pipeline 14 — measure how the finished map is organised.
 
-The probe answered its go/no-go question on 2,000 museums. This re-asks the same
-questions of the built map, on whatever corpus it was built from, so the report
-can say whether the conclusions replicated or were an artefact of the sample.
-
-Every metric here is deliberately the same one the probe used, so the numbers are
-comparable to `probe/reports/`:
+Describes whatever corpus the map was built from: how much of its structure is
+country, language or declared type, how far a museum's subject-neighbours are in
+the world, and where the thin-lead museums land.
 
 * ARI of the discovered regions against country / type / language. ARI compares
   partitions and is punished when ~50 regions meet ~200 countries, so it is
@@ -19,12 +16,11 @@ comparable to `probe/reports/`:
 
 * The local<->universal axis: median *great-circle* distance to a museum's 10
   nearest *embedding* neighbours, aggregated by type. Small means its peers are
-  down the road, large means they are everywhere. The probe found local/
-  ethnographic/archaeological at one end and military/railway/natural-history at
-  the other.
+  down the road, large means they are everywhere. This is the most legible output
+  of the stage — it says which kinds of museum are a local institution and which
+  are an international genre.
 
-It also measures something the probe could not: how the corpus's stub tail —
-museums whose article is one sentence — lands on the map.
+* How the stub tail — museums whose article is one sentence — lands on the map.
 """
 
 from __future__ import annotations
@@ -158,15 +154,15 @@ def main() -> None:
               + (f"  (subsampled to {PROBE_CAP:,})" if capped else ""))
 
     # ---- local <-> universal axis ---------------------------------------------
-    # Median *great-circle* distance to the 10 nearest EMBEDDING neighbours, which
-    # is the probe's definition. Small = its peers are down the road (a local-history
-    # museum); large = its peers are worldwide (a railway museum). Note this is not
-    # cosine distance to those neighbours, which measures embedding density instead
-    # and answers a different question entirely.
+    # Median *great-circle* distance to the 10 nearest EMBEDDING neighbours.
+    # Small = its peers are down the road (a local-history museum); large = its
+    # peers are worldwide (a railway museum). Note this is not cosine distance to
+    # those neighbours, which measures embedding density instead and answers a
+    # different question entirely.
     #
-    # The probe materialised the full N x N haversine matrix; at 49k that is 9.7 GB.
-    # Only the 10 neighbour distances per museum are needed, so they are computed
-    # directly and the matrix never exists.
+    # Materialising the full N x N haversine matrix is 9.7 GB at 49k. Only the 10
+    # neighbour distances per museum are needed, so they are computed directly and
+    # the matrix never exists.
     lat, lon = leads.lat.to_numpy(), leads.lon.to_numpy()
     radius_km = haversine_to_neighbours(lat, lon, idx[:, 1:])
     leads["radius_km"] = radius_km

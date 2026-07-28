@@ -10,9 +10,9 @@ it. Two consequences that shape this stage:
 
 * Points that land in low-density gaps come back `Unlabelled`, per layer and
   recomputed independently at each. That is the unnamed space between named
-  places, not a failure to classify, and it is **kept** in the output. The probe's
-  ~40% HDBSCAN noise fraction is not an argument against this approach — a point
-  with no name of its own still sits inside the named region above it.
+  places, not a failure to classify, and it is **kept** in the output. A large
+  HDBSCAN noise fraction is not an argument against this approach — a point with
+  no name of its own still sits inside the named region above it.
 
 Layer order follows Toponymy's own convention: index 0 is the finest layer (most,
 smallest regions), index -1 the coarsest.

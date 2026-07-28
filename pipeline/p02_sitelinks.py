@@ -1,9 +1,8 @@
 """Build 01 — resolve real Wikipedia sitelinks for every museum in the corpus.
 
-The probe resolved sitelinks for 7,233 sampled candidates; this does the same for
-all 55,280. `sitelink_count` from the harvest counts Commons/Wikiquote/Wikisource
-too, so it cannot be used to plan the fetch — only this stage knows how many real
-Wikipedia articles exist.
+`sitelink_count` from the harvest counts Commons/Wikiquote/Wikisource too, so it
+cannot be used to plan the fetch — only this stage knows how many real Wikipedia
+articles exist, for all 55,280 museums.
 
 Resumption is free rather than incremental: all ~1,100 responses are cached by
 request hash, so a re-run replays from disk in about a minute and continues.

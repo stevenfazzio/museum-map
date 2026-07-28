@@ -50,8 +50,8 @@ def corpus_paths(name: str) -> tuple[Path, Path]:
     elif name == "full_recovered":
         leads = INTERIM / "full_recovered" / "leads.parquet"
     else:
-        # The fixture is a random sample of the finished corpus, built by p05.
-        # It deliberately does not reuse the probe stratified sample.
+        # The fixture is a plain random sample of the finished corpus, built by
+        # p05 — deliberately not stratified, see that stage's docstring.
         leads = INTERIM / "fixture_leads.parquet"
         if not leads.exists():
             raise SystemExit(f"missing {leads} — run pipeline/p05_fixture.py first")

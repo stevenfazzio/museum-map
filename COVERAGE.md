@@ -96,11 +96,11 @@ museum is listed on the National Register of Historic Places, acquires
 claim. Italian and Japanese museums are typed as museums.
 
 This under-represents the United States by a quarter, which is the corpus's
-largest known bias and the obvious threat to FINDINGS.md's "not a choropleth"
-verdict. That was tested rather than left as a caveat: the map was rebuilt as
-`full_recovered` (54,778 museums) and every metric recomputed. Country ARI does
-not move at any layer — +0.002 at the finest, every delta within +/-0.002 — and
+largest known bias. Rather than leave it as a caveat, the map was rebuilt as
+`full_recovered` (54,778 museums) and every metric recomputed. Nothing moves:
+country ARI stays at +0.002 at the finest layer, every delta within +/-0.002, and
 10-NN country purity falls slightly once the chance baseline is controlled for.
+The recovered museums arrive as subject regions rather than geographic ones.
 See FINDINGS.md.
 
 ## Method

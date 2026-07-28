@@ -1,7 +1,6 @@
 """Build 03 — assign one museum type per museum, for the whole corpus.
 
-Same rule as the probe's s04, applied to all 55,280 rather than the sample: a
-museum's type is the *least common* of its P31 values among the K most common
+A museum's type is the *least common* of its P31 values among the K most common
 museum types globally. Least common = most specific, so {museum, art museum}
 labels as "art museum" while a museum tagged only {museum} stays generic.
 
@@ -29,9 +28,9 @@ from museum_map.common import INTERIM, RAW, SUBCLASSES, qid, sparql, write_parqu
 from museum_map.wiki import fetch_en_labels  # noqa: E402
 
 
-# The probe used 15 against a 2,000-row sample. The full corpus is 27x larger, so
-# a longer tail of types clears a usable count; 25 keeps the rarest bucket in the
-# hundreds rather than the single digits.
+# 25 keeps the rarest bucket in the hundreds rather than the single digits. A
+# smaller K was enough at sample scale; the full corpus is large enough that a
+# longer tail of types clears a usable count.
 TOP_K_TYPES = 25
 
 

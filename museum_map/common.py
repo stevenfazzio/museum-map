@@ -27,21 +27,17 @@ RAW = DATA / "raw"
 INTERIM = DATA / "interim"
 PROCESSED = DATA / "processed"
 # `reports/` is where the pipeline writes the finished maps (gitignored — they are
-# regenerable and the full one is ~14 MB). The probe keeps its own reports and
-# figures next to its code, so re-running it cannot scatter output into the
-# pipeline's directory.
+# regenerable and the full one is ~11 MB).
 REPORTS = ROOT / "reports"
-PROBE_REPORTS = ROOT / "probe" / "reports"
-FIGS = PROBE_REPORTS / "figs"
 
-for _d in (CACHE, RAW, INTERIM, PROCESSED, REPORTS, PROBE_REPORTS, FIGS):
+for _d in (CACHE, RAW, INTERIM, PROCESSED, REPORTS):
     _d.mkdir(parents=True, exist_ok=True)
 
 SEED = 42
 N_SAMPLE = 2000
 
 USER_AGENT = (
-    "museum-map-probe/0.1 (https://github.com/stevenfazzio/museum-map; fazzios@gmail.com) "
+    "museum-map/0.1 (https://github.com/stevenfazzio/museum-map; fazzios@gmail.com) "
     "python-requests"
 )
 

@@ -42,6 +42,28 @@ def wikipedia_sites() -> dict[str, dict]:
     return out
 
 
+def language_names() -> dict[str, str]:
+    """Wikipedia language code -> English name ("ja" -> "Japanese").
+
+    Same sitematrix call as `wikipedia_sites`, so it is already in the cache by
+    the time anything asks: this costs a disk read, not a request. Codes with no
+    `localname` fall back to themselves rather than disappearing.
+    """
+    res = request_json(
+        WIKIDATA_API,
+        namespace="sitematrix",
+        params={"action": "sitematrix", "format": "json", "formatversion": "2"},
+    )
+    out: dict[str, str] = {}
+    for key, group in res["sitematrix"].items():
+        if not key.isdigit():
+            continue
+        code = group.get("code", "")
+        if code:
+            out[code] = group.get("localname") or code
+    return out
+
+
 def _sitelinks_chunk(chunk: list[str], sites: dict[str, dict]) -> dict[str, dict[str, str]]:
     res = request_json(
         WIKIDATA_API,

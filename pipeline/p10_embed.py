@@ -1,14 +1,14 @@
 """Build 10 — embed every museum's lead with BGE-M3.
 
-Only one text variant here. The probe's (b) nofirst and (c) noloc existed to
-answer "is the space just geography?", and that question is settled: geography is
-a gradient the map should keep, not a confound to strip. So the map is built on
-the lead as fetched.
+Only one text variant: the lead as fetched. Variants that stripped the first
+sentence or masked place names were tried to see whether the space was merely
+geography; it is not, and geography is a gradient the map should keep rather than
+a confound to strip.
 
-BGE-M3 rather than e5-large, because the probe's second encoder showed the
-language dominance that drove the first round's conclusions was an e5 artefact:
-language ARI +0.769 under e5 versus +0.017 under BGE-M3, with raw cross-lingual
-P@1 of 0.941. No prefix — that is an e5 convention.
+BGE-M3 rather than multilingual-e5-large. Under e5, article language dominated
+everything — language ARI +0.769, against +0.017 under BGE-M3, with raw
+cross-lingual P@1 of 0.941. Encoder choice, not corpus, was doing that. No prefix
+here — that is an e5 convention.
 """
 
 from __future__ import annotations

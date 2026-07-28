@@ -1,7 +1,7 @@
 """Build 02 — fetch the lead section of every article in the corpus.
 
 The long pole of the whole project: ~166k articles across ~300 wikis. Two things
-this stage does that the probe's s05 did not, both learned the hard way there:
+this stage does that a naive fetch does not, both learned the hard way:
 
 * **Bounded concurrency.** The fetch is latency-bound (~3.3 s per request against
   a 0.15 s throttle floor), so a handful of workers converts ~10 hours into ~3

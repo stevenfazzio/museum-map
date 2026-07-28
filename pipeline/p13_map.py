@@ -7,10 +7,11 @@ unnamed space between named regions at a given zoom, and they still carry their
 coarser-layer name — dropping them would quietly delete a third of the corpus
 from the map.
 
-Clicking a point opens its Wikipedia article. The article URL is rebuilt from the
+Selecting a point opens its Wikipedia article — a click on desktop, and on touch
+an action button on the tap-to-inspect card, since a tap that navigated away
+would leave no chance to read the card first. The article URL is rebuilt from the
 language code rather than stored, because the sitematrix code *is* the subdomain
-for every open Wikipedia, and the probe's fixture leads predate the `dbname`
-column that the full-corpus fetch writes.
+for every open Wikipedia, and not every corpus carries the `dbname` column.
 """
 
 from __future__ import annotations
@@ -26,13 +27,100 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pipeline.common import ROOT, corpus_paths  # noqa: E402
+from museum_map.wiki import language_names  # noqa: E402
 
-TITLE = "The Museum Map"
-SUBTITLE = (
-    "{n:,} museums, placed by what the lead section of their Wikipedia article says "
-    "about them. Regions are named by Toponymy; colour carries region identity only. "
-    "Click a point to open its article."
-)
+TITLE = "Museum Map"
+# Only what the interface cannot teach on its own. The search box, the palette
+# control and the card are all visible or one gesture away; that museums near
+# each other are about similar things is the one thing a visitor has to be told,
+# and it is what makes everything else on screen mean anything.
+SUBTITLE = "{n:,} museums from Wikipedia, arranged so that similar ones sit close together."
+
+# Point radius spans this ratio from the least to the most linked museum, on a
+# log scale. Prominent museums are not spread evenly — the majors cluster — so a
+# wide ratio would inflate the apparent density of whichever regions happen to
+# hold famous institutions, which reads as "this region matters more" when it
+# only means "this region has famous members". 3x is enough to find the Louvre
+# inside the art museums at mid zoom without distorting the shape of the map.
+SIZE_RATIO = 3.0
+
+# Founding date is bucketed rather than ramped, for two reasons. Wikidata folds
+# date precision into the same ISO string, so a century-precision value arrives
+# looking exact; and for a heritage site P571 dates the *structure*, which is why
+# the corpus contains Stonehenge at -1848 and Colchester Castle at 1069. A
+# continuous scale would spend its whole range on a handful of ancient buildings
+# and crush the 20th century, where the median museum actually sits.
+#
+# `not recorded` is a category with a colour, not a gap. 43.3% of the corpus has
+# no date at all, and that absence is not evenly spread — 30.9% coverage on the
+# recovered museums against 51.6% on the Wikidata-typed ones — so rendering it as
+# one end of a ramp would draw missing metadata as if it were an early founding.
+ERA_CUTS = ((1800, "before 1800"), (1900, "1800s"), (1950, "1900–1949"),
+            (1980, "1950–1979"), (2000, "1980–1999"))
+ERA_LAST = "2000 or later"
+ERA_NONE = "not recorded"
+ERA_COLORS = {
+    "before 1800": "#440154", "1800s": "#414487", "1900–1949": "#2a788e",
+    "1950–1979": "#22a884", "1980–1999": "#7ad151", "2000 or later": "#fde725",
+    ERA_NONE: "#9e9e9e",
+}
+
+# p04 labels a museum with the least common of its P31 values, so `museum` means
+# "typed, but only generically" and `other` means "no museum type in the top 25
+# at all". Neither tells you what the museum is about, so both get grey rather
+# than a colour of their own — the grey is where this view has nothing to say,
+# and it covers most of the map.
+TYPE_GENERIC = "museum (generic)"
+TYPE_NONE = "no specific type"
+NO_COUNTRY = "(no country)"  # what p01 writes when a museum has no P17
+
+# datamapplot's categorical colormaps cap at twenty. Fifteen named values plus the
+# neutral buckets stays under it and keeps the legend readable at a glance; past
+# about fifteen the entries are too close in colour to tell apart on a point.
+CAT_TOP_N = 15
+CAT_OTHER = "other"
+
+# Reserved for buckets that are an absence rather than a category. Keeping them
+# grey means the eye reads them as "nothing recorded here" instead of ranking
+# them alongside the named values.
+NEUTRAL_GREYS = ("#adadad", "#d6d6d6", "#8a8a8a")
+
+
+def era_of(year) -> str:
+    if pd.isna(year):
+        return ERA_NONE
+    for cut, name in ERA_CUTS:
+        if year < cut:
+            return name
+    return ERA_LAST
+
+
+def categorical_buckets(
+    values: pd.Series, *, top_n: int = CAT_TOP_N, neutral: tuple[str, ...] = (),
+    other: str = CAT_OTHER,
+) -> tuple[list[str], dict[str, str]]:
+    """Keep the `top_n` commonest values, fold the rest into one bucket.
+
+    `neutral` names buckets that say "not recorded" rather than naming a value:
+    they are always kept, are never ranked against the real values, and are
+    coloured grey. `other` is neutral too — it is a statement about the legend's
+    size, not about the museums in it.
+    """
+    from matplotlib import colormaps
+    from matplotlib.colors import to_hex
+
+    ranked = values[~values.isin(neutral)].value_counts()
+    keep = list(ranked.index[:top_n])
+    out = values.where(values.isin([*keep, *neutral]), other)
+
+    # tab20 indices 14 and 15 are its own grey pair, dropped so that grey stays
+    # unambiguously "no value" rather than also meaning some particular country.
+    wheel = [to_hex(c) for i, c in enumerate(colormaps["tab20"].colors) if i not in (14, 15)]
+    colors = {lab: NEUTRAL_GREYS[i % len(NEUTRAL_GREYS)]
+              for i, lab in enumerate([*neutral, other])}
+    colors.update({k: wheel[i % len(wheel)] for i, k in enumerate(keep)})
+    assert len(set(out)) <= 20, f"{len(set(out))} categories exceeds datamapplot's cap"
+    return out.tolist(), colors
 
 
 def main() -> None:
@@ -65,8 +153,8 @@ def main() -> None:
         print(f"  {c}: {len(np.unique(named))} regions, "
               f"{(layer == 'Unlabelled').mean():.1%} Unlabelled")
 
-    # The fixture's leads carry type_label already (the probe's s04 wrote it into
-    # the sample); the full corpus gets it from b03 as a side file.
+    # The fixture's leads carry type_label already, because p05 samples a corpus
+    # that has been through p04; the full corpora get it as a side file.
     if "type_label" not in leads.columns:
         types_path = leads_path.parent / "types.parquet"
         if types_path.exists():
@@ -79,6 +167,27 @@ def main() -> None:
         else:
             print(f"note: no type labels ({types_path} missing) — run b03_types.py")
             leads["type_label"] = ""
+
+    # p09's Wikidata facts are optional in exactly the way p06's summaries are:
+    # they enrich the card and the palette, and a corpus that has not been through
+    # p09 should still render a correct map rather than fail.
+    facts_path = out_dir / "facts.parquet"
+    if facts_path.exists():
+        n_before = len(leads)
+        leads = leads.merge(
+            pd.read_parquet(facts_path)[
+                ["qid", "website", "founded_year", "heritage", "admin_label"]
+            ],
+            on="qid", how="left",
+        )
+        assert len(leads) == n_before, f"facts merge changed row count: {n_before} -> {len(leads)}"
+        print(f"wikidata facts: founded year for {leads.founded_year.notna().mean():.1%}, "
+              f"admin area for {(leads.admin_label.fillna('') != '').mean():.1%}")
+    else:
+        print(f"note: no facts ({facts_path} missing) — run pipeline/p09_facts.py")
+        leads["founded_year"] = pd.array([pd.NA] * len(leads), dtype="Int64")
+        for col in ("website", "heritage", "admin_label"):
+            leads[col] = ""
 
     # 15.1% of museums have no English label on Wikidata, and the harvest stores
     # the QID in the label column for those rather than leaving it null — so a
@@ -127,12 +236,48 @@ def main() -> None:
     snippet = summary.where(is_summary, lead_snippet).astype(str).map(html.escape)
     source_note = np.where(is_summary, "AI summary", "lead section")
 
+    # The facts line is emitted with its own markup rather than as a bare field,
+    # because the template is a plain format string: there is no way to drop an
+    # empty row from it, and 10.5% of museums have nothing to put here. Building
+    # the wrapper alongside the text lets those cards close up instead of showing
+    # a blank gap. datamapplot substitutes raw, so this must be escaped here —
+    # the same reason `snippet` already is.
+    admin = leads.admin_label.fillna("").astype(str)
+    heritage = leads.heritage.fillna("").astype(str)
+    website = leads.website.fillna("").astype(str)
+    facts_line = [
+        " · ".join(
+            p for p in (a, f"founded {y}" if pd.notna(y) else "", h) if p
+        )
+        for a, y, h in zip(admin, leads.founded_year, heritage)
+    ]
+    facts_html = [
+        f"<div style='opacity:.7;font-size:.78em;margin-bottom:.35rem'>{html.escape(t)}</div>"
+        if t else ""
+        for t in facts_line
+    ]
+    n_facts = sum(1 for t in facts_line if t)
+    print(f"cards carrying a facts line: {n_facts:,} ({n_facts / len(leads):.1%})")
+
+    # The website is a domain, not a link: the card is a hover tooltip, so it
+    # disappears the moment you move the pointer towards anything in it. As text
+    # it still says "this is an operating institution with a web presence".
+    domain = website.str.replace(r"^https?://(www\.)?", "", regex=True).str.split("/").str[0]
+    footer = [
+        f"{s} · {html.escape(d)}" if d else s for s, d in zip(source_note, domain)
+    ]
+
     # The search corpus is an explicit column rather than `hover_text`: supplying
     # `hover_text_html_template` replaces hover_text with the rendered tooltip
     # markup, so `search_field="hover_text"` ends up searching HTML. Verified by
     # searching "Germany" against 34 German museums in the fixture and matching
     # essentially none of them.
-    search_blob = (name + " · " + country + " · " + type_label).str.strip(" ·")
+    #
+    # `admin` is the only one of these that can be empty (13.6% of museums), and
+    # it is last, so the trailing separator is what `strip` removes.
+    search_blob = (
+        name + " · " + country + " · " + type_label + " · " + admin
+    ).str.strip(" ·")
 
     extra = pd.DataFrame({
         "name": name,
@@ -141,7 +286,8 @@ def main() -> None:
         "lang": leads.lang.astype(str),
         "url": url,
         "snippet": snippet,
-        "source_note": source_note,
+        "facts": facts_html,
+        "source_note": footer,
         "region": label_layers[0],
         "search": search_blob,
     })
@@ -151,10 +297,75 @@ def main() -> None:
         "<div style='font-weight:600;margin-bottom:.2rem'>{name}</div>"
         "<div style='opacity:.75;font-size:.85em;margin-bottom:.4rem'>"
         "{country} · {type} · {lang}.wikipedia</div>"
+        "{facts}"
         "<div style='font-size:.85em;line-height:1.35'>{snippet}</div>"
         "<div style='opacity:.55;font-size:.72em;margin-top:.45rem'>{source_note}</div>"
         "</div>"
     )
+
+    # ---- point size: how many wikis and sister projects link this museum ----
+    #
+    # datamapplot renormalises this array by its own mean before handing it to
+    # deck.gl's getRadius, so only the ratios matter, not the units. log1p first:
+    # sitelink_count runs 1 to 167 with a median of 2, and raw values would put a
+    # 46x radius on the Louvre.
+    #
+    # This is the one field in the corpus with no coverage skew — mean 3.59 on the
+    # Wikidata-typed museums against 3.50 on the recovered ones, zero nulls in
+    # either — which is why prominence gets the permanent channel and every
+    # sparser field is left to the palette control, where choosing it is opt-in.
+    linked = np.log1p(leads.sitelink_count.to_numpy(dtype=float))
+    span = max(linked.max() - linked.min(), 1e-9)
+    marker_size = 1.0 + (SIZE_RATIO - 1.0) * (linked - linked.min()) / span
+
+    # ---- what the palette control can recolour by ----
+    #
+    # datamapplot always offers "Clusters" first and these ride alongside it, so
+    # the map still opens coloured by region. Everything here is either complete
+    # by construction (country, language, sitelinks, declared type) or carries its
+    # own explicit "not recorded" category. Nothing sparse gets a continuous ramp:
+    # coverage of the Wikidata fields tracks how thorough a country's editors have
+    # been, so a ramp over one would draw editor attention and read as geography.
+    era = [era_of(y) for y in leads.founded_year]
+    type_bucket, type_colors = categorical_buckets(
+        leads.type_label.fillna("").astype(str).replace(
+            {"museum": TYPE_GENERIC, "other": TYPE_NONE}),
+        top_n=12, neutral=(TYPE_GENERIC, TYPE_NONE), other="other type",
+    )
+    # Country and language answer the two questions people ask of a point once
+    # they have found it: where is this, and who wrote about it. They also make the
+    # shape of the space legible — country is confetti at a glance and clumped up
+    # close, which is what "geography is a gradient, not a partition" looks like.
+    # The two colour similarly, because `select_leads` picks a museum's lead from
+    # its country's languages; language earns its slot on the wikis that span many
+    # countries.
+    country_bucket, country_colors = categorical_buckets(
+        leads.country_label.fillna(NO_COUNTRY).astype(str), neutral=(NO_COUNTRY,))
+    lang_names = language_names()
+    lang_bucket, lang_colors = categorical_buckets(
+        leads.lang.astype(str).map(lambda c: lang_names.get(c, c)))
+
+    # Positional: entry i of rawdata is described by entry i of metadata.
+    colormap_rawdata = [np.array(country_bucket), np.array(lang_bucket),
+                        np.array(era), np.array(type_bucket), linked]
+    colormap_metadata = [
+        {"field": "country", "description": "Country", "kind": "categorical",
+         "color_mapping": country_colors},
+        {"field": "language", "description": "Article language", "kind": "categorical",
+         "color_mapping": lang_colors},
+        {"field": "era", "description": "Founded", "kind": "categorical",
+         "color_mapping": ERA_COLORS},
+        {"field": "wdtype", "description": "Wikidata type", "kind": "categorical",
+         "color_mapping": type_colors},
+        {"field": "sitelinks", "description": "Prominence (sitelinks, log)",
+         "kind": "continuous", "cmap": "viridis"},
+    ]
+    print(f"\npalette options: {', '.join(m['description'] for m in colormap_metadata)}")
+    for name_, series in (("founded", era), ("country", country_bucket),
+                          ("language", lang_bucket)):
+        vc = pd.Series(series).value_counts()
+        top = ", ".join(f"{k} {v / len(leads) * 100:.0f}%" for k, v in vc.head(4).items())
+        print(f"  {name_:<9} {len(vc):>2} buckets — {top}")
 
     out = Path(args.out) if args.out else ROOT / "reports" / f"map_{args.corpus}{tag}.html"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -165,25 +376,22 @@ def main() -> None:
         hover_text=search_blob.tolist(),
         extra_point_data=extra,
         hover_text_html_template=hover_template,
+        marker_size_array=marker_size,
+        colormap_rawdata=colormap_rawdata,
+        colormap_metadata=colormap_metadata,
         on_click="window.open(`{url}`)",
+        # TODO once datamapplot's tap-to-inspect lands on PyPI (merged in 934c541,
+        # unreleased as of 0.7.3): pass `on_click_label`. On touch the tap opens a
+        # card rather than firing on_click, and the card's action button carries
+        # that label — unset, a mobile visitor gets datamapplot's default wording
+        # where this map wants something like "Open Wikipedia article".
         enable_search=True,
         search_field="search",
-        enable_topic_tree=True,
         noise_label="Unlabelled",
         darkmode=args.darkmode,
         cvd_safer=True,
-        # Black label text rather than per-cluster colour. The CVD-safer palette
-        # runs light enough that a pale label on a pale background is a coin flip,
-        # and point colour already carries region identity, so tying the label to
-        # it buys little. (Note: labels that overlap a neighbour are *also* faded
-        # by deck.gl's collision filter, which looks identical to a contrast
-        # problem in a static screenshot and is not fixed by this.)
-        color_label_text=False,
         title=TITLE,
         sub_title=SUBTITLE.format(n=len(leads)),
-        font_family="Inter",
-        label_wrap_width=20,
-        initial_zoom_fraction=0.995,
         inline_data=True,
     )
     plot.save(out)

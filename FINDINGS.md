@@ -1,55 +1,84 @@
-# The Museum Map — what the full corpus shows
+# The Museum Map — what it shows
 
-The probe asked a go/no-go question on 2,000 museums: is the embedding space of
-museum Wikipedia leads just a restatement of country and type? It said no, and
-that type is real recoverable content. This is the same set of questions asked of
-the built map.
+This page describes what is in the map and what it can tell you about museums.
+Three things stand out: some kinds of museum are local institutions while others
+are an international genre; the map knows what a museum is about even when
+Wikidata does not; and geography runs through all of it as a gradient rather than
+as a set of borders.
 
-Every number on this page is measured on the `full` corpus — **49,218 museums in
-158 languages**, every museum Wikidata *types* as a museum. The map that ships is
-`full_recovered` (54,778), which adds the 5,560 museums Wikidata types as houses
-and buildings; the section *The verdict survives closing the corpus's largest
-known bias* recomputes all of this against it and finds no material difference.
+Most numbers on this page are measured on the `full` corpus — **49,218 museums in
+158 languages**, every museum Wikidata *types* as a museum — because that is the
+corpus the analysis was run against. The map that ships is `full_recovered`
+(54,778), which adds the 5,560 museums Wikidata types as houses and buildings;
+*Adding the missing museums changes nothing* recomputes everything against it.
 
 Numbers: `data/processed/map_full/analysis_short.json`.
 Maps: `reports/map_full_recovered_short.html` (shipped),
-`reports/map_full_short.html` (the baseline these numbers describe).
+`reports/map_full_short.html` (what these numbers describe).
 
-## The headline
+## Some kinds of museum are local, others are an international genre
 
-**The probe's conclusions replicate, and the two that matter get stronger.** But
-the stratified 2,000-museum sample was actively misleading about geography, and
-one finding I carried forward from it turns out to be wrong (see *Corrections*).
+The most legible thing the map measures. For each museum, take its 10 nearest
+neighbours *in the embedding* and ask how far away they are on the ground:
 
-| | probe (2,000, stratified) | full (49,218) |
+| most locally rooted | | most internationally legible | |
+|---|---|---|---|
+| independent museum | 204 km | aviation museum | 1,496 km |
+| local museum | 371 km | sculpture garden | 1,246 km |
+| religious museum | 380 km | natural history museum | 965 km |
+| museum of a public entity | 406 km | national museum | 943 km |
+| historic house museum | 436 km | railway museum | 921 km |
+
+Local-history and religious museums are *about* their locality; aircraft,
+dinosaurs and locomotives are globally shared subject matter. The sharpest case is
+a pair that structured data treats as near-synonyms: a **heritage railway** is a
+local institution at 487 km, a **railway museum** an international genre at
+921 km.
+
+This is the axis that tells you which museums reward travelling for, and it falls
+out of the text alone — nothing in the pipeline was told where anything is.
+
+## The map knows what a museum is about when Wikidata does not
+
+**64.1% of the corpus (31,565 museums) carries only the generic `museum` type, or
+nothing among the 25 commonest museum types.** Of those, **14,500 land inside a
+*named* region** at the 21-region layer — the map gives them a subject their
+metadata does not have.
+
+Add back the 5,560 museums the corpus misses — none of which carries a museum type
+at all — and it is **67.8% (37,125 of 54,778)**, of which **19,277** land in a
+named region at the 22-region layer. The metadata is poorer than the corpus's own
+headline suggests, and the text carries correspondingly more of the load.
+
+| region | museums | of which Wikidata types generically |
 |---|---|---|
-| region ARI vs country | +0.016 | **+0.002** |
-| region ARI vs language | +0.017 | **+0.002** |
-| type probe vs majority baseline | 0.54–0.57 vs 0.266 | **0.655 vs 0.230** |
-| 10-NN country purity (vs chance) | 0.140 (0.007) | **0.435 (0.041)** |
-| neighbourhood radius vs random pair | 0.38x | **0.14x** |
+| Municipal and City Heritage | 2,290 | 73.5% |
+| War and Military Memorials | 2,020 | 67.4% |
+| Writers' and Artists' Memorial Houses | 1,844 | 67.3% |
+| Ethnographic and Folk Traditions | 1,803 | 68.2% |
+| Natural History and Paleontology | 1,284 | 66.2% |
+| European Castles and Palaces | 1,273 | 65.8% |
 
-## The map is not a restatement of country, language, or type
+The Heritage and Tourist Railways region holds 461 declared `heritage railway`
+and 393 declared `railway museum` entries — and **410 museums Wikidata calls
+nothing more specific than "museum"**. Natural History and Paleontology holds 290
+declared `natural history museum` entries against **710 generic ones**. Those 410
+and 710 are museums you could not have found by filtering Wikidata at all.
 
-Adjusted Rand Index between the discovered regions and each candidate
-explanation, at every layer:
+A linear probe puts a number on how recoverable type is from the text alone:
+**0.655 accuracy against a 0.230 majority baseline** on the 17,653
+specifically-typed museums.
 
-| layer | regions | vs country | vs type | vs language |
-|---|---|---|---|---|
-| 0 (finest) | 984 | +0.002 | +0.001 | +0.002 |
-| 1 | 287 | +0.002 | +0.021 | −0.001 |
-| 2 | 85 | +0.005 | +0.036 | −0.001 |
-| 3 | 21 | +0.009 | +0.054 | +0.021 |
-| 4 (coarsest) | 7 | +0.013 | +0.025 | +0.033 |
+## What the regions actually are
 
-None of the three partitions the space at any scale. The coarsest seven regions
-are subject matter, not places:
+The coarsest seven, which is what you see zoomed all the way out:
 
 > Regional Art and History · War and Military Memorials · Historic Houses ·
 > Natural History · Contemporary Art · Municipal and City Heritage ·
 > Ethnographic and Folk Traditions
 
-The 21-region layer below it is where the map is most readable:
+The 21-region layer below it is where the map is most readable, and it is the
+best single answer to "what kinds of museum are there":
 
 > Military Aviation Heritage · Vintage and Classic Vehicles · War and Military
 > Memorials · Chinese Regional History · Japanese Local History and Art ·
@@ -61,24 +90,34 @@ The 21-region layer below it is where the map is most readable:
 > City Heritage · Ethnographic and Folk Traditions · Artist-Focused Commercial
 > Galleries · Contemporary and Modern Art · American and University Art
 
-Geography appears as a modifier on subject ("Japanese Prefectural Art and
-Heritage"), never as the top-level split.
+Every one of those is subject matter. None of them is a place, a language or a
+Wikidata class — measured as Adjusted Rand Index against each, at every layer:
 
-## The verdict survives closing the corpus's largest known bias
+| layer | regions | vs country | vs type | vs language |
+|---|---|---|---|---|
+| 0 (finest) | 984 | +0.002 | +0.001 | +0.002 |
+| 1 | 287 | +0.002 | +0.021 | −0.001 |
+| 2 | 85 | +0.005 | +0.036 | −0.001 |
+| 3 | 21 | +0.009 | +0.054 | +0.021 |
+| 4 (coarsest) | 7 | +0.013 | +0.025 | +0.033 |
+
+Where geography does show up in a name it is a modifier on subject — *Japanese
+Prefectural Art and Heritage* — never the top-level split.
+
+## Adding the missing museums changes nothing
 
 The numbers above are measured on a corpus defined by `wdt:P31/wdt:P279*
 wd:Q33506`, which misses 5,560 museums that Wikidata types as houses and
 buildings — 24% of US museums, against 2% for Italy and Japan (`COVERAGE.md`).
-That is not a neutral omission: it is a systematic hole in one country, and the
-obvious worry is that "the map is not a restatement of country" holds only
-because the corpus under-samples its largest country.
+That is not a neutral omission: it is a systematic hole in one country, and it
+would be reasonable to expect the map to look different once it is filled.
 
 So the map was rebuilt with those museums added — `full_recovered`, 54,778
 museums — and every metric on this page recomputed. The added set is **31.5% US
 against the corpus's 10.3%** and **44% English-lead against 20.3%**, so it pushes
-hard in exactly the direction that should break the finding.
+hard in the direction most likely to change the answer.
 
-**It does not move.**
+**Nothing moves.**
 
 | ARI vs country | full | full_recovered |
 |---|---|---|
@@ -109,84 +148,29 @@ The recovered museums arrive as subject regions, not geographic ones —
 `National Park Service Visitor Centers`. 1,752 new US museums, overwhelmingly
 historic house museums, were absorbed by what they are about.
 
-This is a stronger claim than the original run supports. The verdict was not
-merely unchallenged; it survived a directed attempt to break it using the
-corpus's own worst bias.
-
-`full_recovered` is now the map that ships
+`full_recovered` is the map that ships
 (`reports/map_full_recovered_short.html`), built by `p07_gap` + `p08_recover`.
-`full` is kept buildable on its own as the baseline this comparison is measured
-against, and `p08` never writes over it — so every other number on this page
-still describes `map_full_short.html`, the artifact it was computed on.
+`full` stays buildable on its own — `p07` and `p08` read its leads as their input,
+and `p08` never writes over it — so every other number on this page still
+describes `map_full_short.html`, the artifact it was computed on.
 
-## The map recovers subject matter that Wikidata does not record
+## Geography is everywhere in the map, and it is a gradient
 
-This is the strongest argument that the map carries information a choropleth with
-a type filter could not.
-
-**64.1% of the corpus (31,565 museums) carries only the generic `museum` P31 or
-no museum type at all.** Of those, **14,500 land inside a *named* region at the
-21-region layer** — the map assigns a subject to them that their metadata does
-not have.
-
-That figure understates the problem, because the corpus is itself selected on
-Wikidata having typed a museum as a museum. Add back the 5,560 it misses — none
-of which carries any museum type, definitionally — and it is **67.8% (37,125 of
-54,778)**. The metadata is poorer than this page's headline number suggests, and
-the text carries correspondingly more of the load.
-
-| region | museums | of which Wikidata types generically |
-|---|---|---|
-| Municipal and City Heritage | 2,290 | 73.5% |
-| War and Military Memorials | 2,020 | 67.4% |
-| Writers' and Artists' Memorial Houses | 1,844 | 67.3% |
-| Ethnographic and Folk Traditions | 1,803 | 68.2% |
-| Natural History and Paleontology | 1,284 | 66.2% |
-| European Castles and Palaces | 1,273 | 65.8% |
-
-The Heritage and Tourist Railways region holds 461 declared `heritage railway`
-and 393 declared `railway museum` entries — and **410 museums Wikidata calls
-nothing more specific than "museum"**. Natural History and Paleontology holds 290
-declared `natural history museum` entries against **710 generic ones**. The text
-knows what these are about; the structured data does not.
-
-The linear probe puts a number on it: **0.655 accuracy against a 0.230 majority
-baseline** on the 17,653 specifically-typed museums, up from 0.54–0.57 on the
-probe's sample. Type is *more* recoverable at scale, not less.
-
-## Geography: the stratified sample hid most of it
-
-The probe found a steep local decay and concluded geography was a gradient rather
-than a partition. That holds — country ARI is +0.002 — but the *strength* was
-badly understated, and the sampling rule is why.
-
-The probe's 2,000 were allocated across countries ∝ √n, deliberately flattening
-Italy/Germany/US from ~30% of all museums down to a fraction of that. That
-flattening also, by construction, pushed each museum's neighbours into different
-countries. Removing it:
+Country ARI is +0.002, so country does not *partition* the space. That is easy to
+misread as "geography isn't in here." It is, densely:
 
 - **Median distance to a museum's 10 nearest *embedding* neighbours: 825 km**,
-  against a 5,721 km random-pair baseline — **0.14x**, where the stratified
-  sample said 0.38x.
+  against a 5,721 km random-pair baseline — **0.14x**.
 - 10-NN country purity **0.435 against 0.041 chance — 11x**.
 
-So a museum's semantic neighbours are, typically, a few hundred kilometres away.
-Geography is much more present in this space than the probe could see.
+A museum's semantic neighbours are, typically, a few hundred kilometres away.
+Nothing in the pipeline was given a coordinate; this is what museums being about
+their own surroundings looks like from the text.
 
-**The local↔universal axis reproduces the probe's unprompted ordering:**
-
-| most locally rooted | | most internationally legible | |
-|---|---|---|---|
-| independent museum | 204 km | aviation museum | 1,496 km |
-| local museum | 371 km | sculpture garden | 1,246 km |
-| religious museum | 380 km | natural history museum | 965 km |
-| museum of a public entity | 406 km | national museum | 943 km |
-| historic house museum | 436 km | railway museum | 921 km |
-
-Local-history and religious museums are *about* their locality; aircraft,
-dinosaurs and locomotives are globally shared subject matter. A nice detail: a
-*heritage railway* (487 km) is a local institution, while a *railway museum*
-(921 km) is an international genre.
+Both facts are true at once, and the map shows both: recolour by country and it
+is confetti at a glance, with real concentrations up close. Geography appears in
+the region names as a modifier on subject — *Japanese Prefectural Art and
+Heritage* — never as the top-level split.
 
 ## Language
 
@@ -230,12 +214,13 @@ the record:
 per layer; it is kept on purpose. 55.3% at the finest layer describes a smooth
 space, not a defect.
 
-## Corrections
+## Thin articles are not a quality problem
 
-**The stub finding does not replicate, and I had it backwards.** On the fixture,
-museums with leads under 150 characters were 48.4% unlabelled against 38.2% for
-the longest, and sat at the largest neighbourhood radius — I reported this as the
-map's main quality risk. At full scale it is **flat**:
+Worth stating because the opposite is the natural assumption, and because a
+2,000-museum sample said the opposite first. On that sample, museums with leads
+under 150 characters were 48.4% unlabelled against 38.2% for the longest, and sat
+at the largest neighbourhood radius — which read as the map's main quality risk.
+At full scale it is **flat**:
 
 | lead length | museums | unlabelled | radius |
 |---|---|---|---|
@@ -250,16 +235,16 @@ By decile the range is 54.3%–57.6%, and the *shortest* decile is the least
 unlabelled. Short leads are also slightly more locally rooted, not more
 dispersed.
 
-The likely reason the fixture said otherwise: at 2,000 museums the stubs are
-sparse and scatter into noise, while at 49,218 there are enough of them to form
-their own dense, nameable regions. Scale changed the answer.
+The likely reason a sample says otherwise: at 2,000 museums the stubs are sparse
+and scatter into noise, while at 49,218 there are enough of them to form their own
+dense, nameable regions. Scale changes the answer — which is a caution about
+sampled fixtures generally, not about this measurement.
 
-It replicates a second time on `full_recovered`, whose stub tail is larger
-(8,397 museums under 150 chars against 7,869) and differently composed: 55.4%
-unlabelled for the shortest band against 57.4% for the longest, radius still
-climbing monotonically 523 → 925 km. A correction that holds on two corpora with
-different composition is worth more than one that holds on the corpus it was
-derived from.
+It holds a second time on `full_recovered`, whose stub tail is larger (8,397
+museums under 150 chars against 7,869) and differently composed: 55.4% unlabelled
+for the shortest band against 57.4% for the longest, radius still climbing
+monotonically 523 → 925 km. A result that holds on two corpora with different
+composition is worth more than one that holds only on the corpus it came from.
 
 **The unlabelled fraction is higher at scale** — 56.9% at the finest layer
 against 41.4% on the fixture — but it is not the stubs causing it, and it is not
@@ -355,12 +340,14 @@ finest layer still sits inside a named region at a coarser one.
   finding.
 - **Hover and click were verified by hand**, not by this pipeline — synthetic
   pointer events do not reach a WebGL canvas. The search box was verified end to
-  end programmatically.
-- **The residual 1.11x language effect** has not been chased down. The probe's
-  cross-lingual retrieval test (parallel articles for the same museum) was never
-  re-run at full scale; that is the clean way to settle it. It shrank rather than
-  grew when the lead rule was fixed, so it is a lower priority than it looks.
+  end programmatically. Touch was not exercised at all, and on a phone the card
+  is currently unreachable; see the README on mobile.
+- **The residual 1.11x language effect** has not been chased down. A cross-lingual
+  retrieval test — parallel articles for the same museum, checking whether they
+  land together — is the clean way to settle it, and has never been run at full
+  scale. It shrank rather than grew when the lead rule was fixed, so it is a lower
+  priority than it looks.
 - **The lead rule is national, the world is not.** A museum in Puerto Rico or
   Catalonia or Quebec gets its country's plurality language, not its own. Fixing
-  it needs subnational data (`P131` is already fetched for the probe's gazetteer)
+  it needs subnational data (`P131` is already fetched, and now labelled by `p09`)
   and would matter most for exactly the regions a world map should not flatten.

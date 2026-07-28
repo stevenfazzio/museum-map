@@ -4,16 +4,12 @@ The map stages are slow enough at 49k that iterating on them directly is
 painful, so every stage takes `--corpus fixture` and runs against 2,000 museums
 instead. This builds that fixture.
 
-It is a plain random sample of the finished corpus, deliberately *not* the
-probe's stratified sample. The probe allocated museums per country in proportion
-to sqrt(n), which flattens Italy/Germany/US — and in doing so pushed each
-museum's neighbours into other countries by construction, understating the
-geographic signal by a factor of 2.7 (0.38x vs 0.14x of the random-pair
-baseline). A fixture that misrepresents the corpus that badly is worse than none,
-because it gets trusted.
-
-Sampling the corpus we already have also breaks the last dependency the pipeline
-had on the probe: nothing here needs `probe/` to have been run.
+It is a plain random sample of the finished corpus, deliberately *not* stratified.
+An earlier fixture allocated museums per country in proportion to sqrt(n), which
+flattens Italy/Germany/US — and in doing so pushed each museum's neighbours into
+other countries by construction, understating the geographic signal by a factor
+of 2.7 (0.38x vs 0.14x of the random-pair baseline). A fixture that misrepresents
+the corpus that badly is worse than none, because it gets trusted.
 
 **What the fixture can and cannot predict.** Distributional properties transfer
 closely — median lead 470 vs 467 chars, 19.2% vs 19.4% under 200 chars, 69.5% vs
