@@ -12,11 +12,11 @@ those are recovered from the wikis' own museum category trees. See
 
 The question behind it: is such a map a real thing, or is it just a choropleth
 with a type filter? The answer is in [`FINDINGS.md`](FINDINGS.md). The short
-version: **64% of these museums carry no museum type in Wikidata beyond the
-generic "museum", and the map gives 17,697 of them a subject anyway.** The
-Heritage Railways region contains 847 museums the structured data calls nothing
-more specific than "museum". The text knows what they are about; the metadata
-does not.
+version: **67.8% of these museums carry no museum type in Wikidata beyond the
+generic "museum", and the map gives 19,277 of them a subject anyway** at the
+22-region layer. The text knows what they are about; the metadata does not —
+and the 5,560 recovered museums make that sharper, because Wikidata gives them
+no type at all.
 
 ## Run it
 
@@ -37,13 +37,35 @@ nohup uv run python -u pipeline/p03_leads.py --workers 4 > logs/p03_leads.log 2>
 The two extra corpus stages, needed once for `full_recovered`:
 
 ```bash
-uv run python -u pipeline/p07_gap.py     > logs/p07_gap.log 2>&1   # hours, ~$27
+uv run python -u pipeline/p07_gap.py     > logs/p07_gap.log 2>&1
 uv run python -u pipeline/p08_recover.py > logs/p08_recover.log 2>&1
 ```
 
-Needs `ANTHROPIC_API_KEY` for region naming (~1,300 Haiku calls, roughly $5–8 at
-full scale). Everything is resumable: HTTP responses are cached by request hash,
-leads are written as per-wiki shards, embeddings checkpoint every 5,000 rows.
+Needs `ANTHROPIC_API_KEY` for region naming, tooltip summaries and p07's
+classifier. Everything is resumable: HTTP responses are cached by request hash,
+leads are written as per-wiki shards, embeddings checkpoint every 5,000 rows,
+and p06/p10 fingerprint their inputs so a changed lead re-runs only its own row.
+
+### What a full rebuild actually costs
+
+`data/` is gitignored, so a clone has the stages and none of the artifacts.
+Building `full_recovered` from nothing:
+
+| stage | wall clock | money |
+|---|---|---|
+| `p01`–`p03` fetch the Wikidata-typed corpus | ~2 h | — |
+| `p07_gap` crawl 30 wikis + classify | **~8 h** | **~$27** |
+| `p08_recover` fetch and union the 5,560 | ~30 min | — |
+| `run.sh full_recovered` (p10–p14) | ~2 h | ~$8 |
+| `p06_summaries` tooltips | ~30 min | ~$10 |
+| | **~13 h** | **~$45** |
+
+`p07` is the expensive one and rarely needs re-running: its output
+(`data/interim/gap/in_scope_qids.json`) changes only as Wikidata's typing does.
+Its 8 hours are ~62,700 HTTP requests at the 2.5/s that WMF tolerates without
+rate-limiting — network-bound, not compute-bound. Skip it and build `full`
+instead if you only want the map, and accept that it is missing 24% of US
+museums.
 
 Output is a single self-contained `reports/map_<corpus>_<tag>.html` — pan, zoom,
 search, and click a point to open its Wikipedia article. The map is
