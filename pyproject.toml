@@ -21,7 +21,12 @@ dependencies = [
     "xx-ent-wiki-sm @ https://github.com/explosion/spacy-models/releases/download/xx_ent_wiki_sm-3.8.0/xx_ent_wiki_sm-3.8.0-py3-none-any.whl",
     # Map build: region naming + the interactive renderer.
     "toponymy>=0.2",
-    "datamapplot>=0.5",
+    # Pinned past the last release, at an exact commit rather than a branch so
+    # the build cannot drift. 0.7.3 (2026-05-31) predates both of the things the
+    # map needs: `scroll_zoom_speed` (#197) and the touch tap-to-inspect card
+    # (#206), which is what makes a point reachable without a hover. Move back to
+    # a release when one ships that contains them.
+    "datamapplot @ git+https://github.com/TutteInstitute/datamapplot.git@5cf47aa5ecc2023dde89226fff93f67513341cf5",
     "anthropic>=0.40",
 ]
 

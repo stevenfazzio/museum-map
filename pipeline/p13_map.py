@@ -86,6 +86,16 @@ CAT_OTHER = "other"
 # them alongside the named values.
 NEUTRAL_GREYS = ("#adadad", "#d6d6d6", "#8a8a8a")
 
+# How fast the scroll wheel zooms. datamapplot's default is deck.gl's own 0.01,
+# which is slow on a map this deep: with five label layers, crossing several zoom
+# levels is the ordinary way to get anywhere rather than an unusual gesture.
+#
+# Not a multiplier on the old feel. deck.gl smooths each wheel tick into a
+# transition and successive ticks interrupt one another, so this measured about
+# 1.7x the zoom per tick rather than 3x — single ticks and ticks spaced 300ms
+# apart alike. Raising it further returns less than proportionally.
+ZOOM_SPEED = 0.03
+
 # What goes in the lat/lon point metadata for a museum with no P625. It has to be
 # a real number: datamapplot ships that metadata as JSON built by `json.dumps`,
 # which writes a bare `NaN` for a missing float, and the browser parses it with a
@@ -396,7 +406,8 @@ def main() -> None:
     # It is injected through the `custom_*` parameters rather than as a widget;
     # museum_map/nearby.py says why, and the reason is not a preference.
     places_path = out_dir / "places.parquet"
-    custom = {"custom_html": None, "custom_css": None, "custom_js": None}
+    custom_js = []
+    custom_html = custom_css = None
     if places_path.exists():
         places = pd.read_parquet(places_path)
         # A gazetteer written before regions existed would otherwise fail deep
@@ -408,12 +419,15 @@ def main() -> None:
         control = NearbyControl(
             places, no_coord=NO_COORD, missing_share=float(1 - has_coord.mean()),
         )
-        custom = {"custom_html": control.html, "custom_css": control.css,
-                  "custom_js": control.javascript}
+        custom_html, custom_css = control.html, control.css
+        custom_js.append(control.javascript)
         print(f"nearby control: {len(places):,} settlements, "
               f"{', '.join(places.name.head(3))}, …")
     else:
         print(f"note: no places ({places_path} missing) — run pipeline/p09_facts.py")
+
+    custom = {"custom_html": custom_html, "custom_css": custom_css,
+              "custom_js": "\n".join(custom_js) or None}
 
     out = Path(args.out) if args.out else ROOT / "reports" / f"map_{args.corpus}{tag}.html"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -428,11 +442,11 @@ def main() -> None:
         colormap_rawdata=colormap_rawdata,
         colormap_metadata=colormap_metadata,
         on_click="window.open(`{url}`)",
-        # TODO once datamapplot's tap-to-inspect lands on PyPI (merged in 934c541,
-        # unreleased as of 0.7.3): pass `on_click_label`. On touch the tap opens a
-        # card rather than firing on_click, and the card's action button carries
-        # that label — unset, a mobile visitor gets datamapplot's default wording
-        # where this map wants something like "Open Wikipedia article".
+        # On touch a tap opens a card rather than firing on_click, and the card's
+        # action button carries this label. datamapplot's default is "Open",
+        # which does not say what would open.
+        on_click_label="Open Wikipedia article",
+        scroll_zoom_speed=ZOOM_SPEED,
         enable_search=True,
         search_field="search",
         noise_label="Unlabelled",

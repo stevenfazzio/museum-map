@@ -49,6 +49,10 @@ uv run python -u pipeline/p07_gap.py     > logs/p07_gap.log 2>&1
 uv run python -u pipeline/p08_recover.py > logs/p08_recover.log 2>&1
 ```
 
+datamapplot is pinned to a commit rather than a release, because the last one
+(0.7.3) predates both the touch tap-to-inspect card and the scroll zoom speed
+the map sets; `pyproject.toml` says which commit and why.
+
 Needs `ANTHROPIC_API_KEY` for region naming, tooltip summaries and p07's
 classifier. Everything is resumable: HTTP responses are cached by request hash,
 leads are written as per-wiki shards, embeddings checkpoint every 5,000 rows,
@@ -97,13 +101,13 @@ git push -f origin gh-pages
 `.nojekyll` stops Pages running the file through Jekyll. Pages serves it gzipped
 at 9.3 MB.
 
-**Desktop only for now.** On a phone the point card is unreachable (there is no
-hover, and touch has no tap path) and the palette control and legend are hidden
-below 768px. Both are datamapplot-side: tap-to-inspect is merged upstream but not
-yet on PyPI, and the viewport-meta and narrow-width-controls work is still open
-([datamapplot#200](https://github.com/TutteInstitute/datamapplot/issues/200)).
-Until those release, the summaries and Wikidata facts on the card are a
-desktop-only feature.
+**Best on desktop.** Tapping a point opens a card carrying the summary, the
+Wikidata facts and a button through to the article, so a phone is no longer shut
+out of the thing the map is for. It is still not a phone-first page: datamapplot
+emits no viewport meta tag, so a phone lays the document out at desktop width and
+scales it down, which leaves the controls small until you pinch. That is the open
+half of
+[datamapplot#200](https://github.com/TutteInstitute/datamapplot/issues/200).
 
 Point size is how many wikis and sister projects link a museum, log-scaled over a
 3x range — a rough proxy for how well known it is, and the only field in the
