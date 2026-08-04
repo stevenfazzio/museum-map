@@ -95,15 +95,25 @@ bucketed with an explicit *not recorded* colour rather than ramped, because
 Wikidata coverage tracks how thorough a country's editors have been and a
 continuous scale would draw that as if it were geography. See `p09_facts.py`.
 
+The nearby control takes a city and a radius and filters to the museums inside
+it. Points are placed by subject rather than by location, so the result scatters
+across the whole map, and that shape is what a city's museums are about. It
+intersects with the search box, so a radius around Kyoto plus a search for *art*
+narrows to both. Each city carries the state or région containing it, which is
+what tells Portland, Oregon from Portland, Maine, and typing a region or country
+name reaches the cities inside it. 12.8% of museums have no coordinate in
+Wikidata and can never appear in a radius result; the control says so under the
+count.
+
 ## Layout
 
 | | |
 |---|---|
-| `museum_map/` | shared library: paths, cached/throttled HTTP, text processing, the centring transform |
+| `museum_map/` | shared library: paths, cached/throttled HTTP, text processing, the centring transform, the nearby control |
 | `pipeline/` | **the project.** p01–p08 build the corpus, p09–p14 build and analyse the map |
 | `FINDINGS.md` | what the finished map shows |
 | `COVERAGE.md` | which museums the corpus misses, and why |
-| `reports/` | generated maps (gitignored — regenerable, and the full one is ~11 MB) |
+| `reports/` | generated maps (gitignored — regenerable, and the full one is ~13 MB) |
 | `data/` | everything fetched and computed (gitignored) |
 
 ### The pipeline
@@ -118,7 +128,7 @@ continuous scale would draw that as if it were geography. See `p09_facts.py`.
 | `p06_summaries` | one-sentence English summary of each lead | `map_<corpus>/summaries.parquet` |
 | `p07_gap` | museums Wikidata does not type as museums | `data/interim/gap/in_scope_qids.json` |
 | `p08_recover` | fetch those, union into a corpus | `data/interim/full_recovered/leads.parquet` |
-| `p09_facts` | the Wikidata fields the hover card can use | `map_<corpus>/facts.parquet` |
+| `p09_facts` | the Wikidata fields the hover card can use, and the settlements behind the nearby control | `map_<corpus>/{facts,places}.parquet` |
 | `p10_embed` | BGE-M3, sequence capped at 2,048 tokens | `data/processed/map_<corpus>/emb.npy` |
 | `p11_layout` | per-language centring → UMAP 2D | `coords.parquet` |
 | `p12_topics` | Toponymy region names, all layers | `topics_<tag>.parquet` |

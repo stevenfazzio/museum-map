@@ -22,6 +22,25 @@ Nothing here is used to *place* a museum — the map is built from lead text and
 this stage runs after the layout. It feeds the hover card, the search field and
 the colormap selector, so re-running it costs p13 and nothing below it.
 
+It also writes `places.parquet`, the gazetteer behind the map's nearby control:
+the settlements a visitor can name, each with a coordinate to measure a radius
+from. It is built here rather than in its own stage because the places are the
+P131 values already sitting in `leads.admins`, whose English labels this stage
+already fetches — splitting it would mean two stages resolving the same QIDs.
+Three things about it:
+
+  * **Settlements only.** `admin_label` is a mix of scales — the commonest
+    values are `New York`, `Rome`, `Florida`, `California`, `Manhattan` — because
+    the pick among a museum's several P131 values is arbitrary (see below). A
+    radius around a state is a disc dropped on its centroid: 100 km around
+    Florida's misses Jacksonville and Miami and says nothing about it. So the
+    gazetteer keeps only the Q486972 subclass closure. The P31 values stay in the
+    cache, so admitting coarser places later costs no network.
+  * **A place with no P625 is dropped**, because there is nothing to measure from.
+  * **`country` is derived, not fetched.** It exists to tell the two Cambridges
+    apart in the typeahead, and the museums referencing a place already carry a
+    country, so it is their plurality rather than another round of requests.
+
 Two things not to read too much into:
 
   * **Coverage is not evenly distributed.** Against the 5,560 museums recovered
@@ -51,7 +70,13 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from museum_map.common import qid, sparql, write_parquet  # noqa: E402
+from museum_map.common import (  # noqa: E402
+    SETTLEMENT_SUBCLASSES,
+    SUBDIVISION_SUBCLASSES,
+    qid,
+    sparql,
+    write_parquet,
+)
 from pipeline.common import corpus_paths  # noqa: E402
 from museum_map.wiki import fetch_en_labels  # noqa: E402
 
@@ -92,6 +117,49 @@ WHERE {
 }
 GROUP BY ?m
 """
+
+
+# What the gazetteer needs about an administrative entity. Same
+# GROUP_CONCAT-then-pick-in-Python shape as FACTS, and for the same reason: the
+# pick is explicit and stable across re-runs.
+#
+# `parents` is one level of P131, deliberately not the transitive `P131*`. The
+# transitive form with the subdivision type test inlined
+# (`?p wdt:P131* ?r . ?r wdt:P31/wdt:P279* wd:Q10864048`) does not return inside
+# WDQS's budget at this stage's chunk size — measured past five minutes on a
+# single 2,000-QID partition, against about twenty seconds for the shape below.
+# Walking one level at a time in Python costs a handful of extra round trips, all
+# cached, and each one is a query shape this stage already knows finishes.
+ADMIN = """
+SELECT ?p
+  (GROUP_CONCAT(DISTINCT STR(?coord); separator="|") AS ?coords)
+  (GROUP_CONCAT(DISTINCT STRAFTER(STR(?type),   "entity/"); separator="|") AS ?types)
+  (GROUP_CONCAT(DISTINCT STRAFTER(STR(?parent), "entity/"); separator="|") AS ?parents)
+WHERE {
+  VALUES ?p { %s }
+  OPTIONAL { ?p wdt:P625 ?coord }
+  OPTIONAL { ?p wdt:P31  ?type }
+  OPTIONAL { ?p wdt:P131 ?parent }
+}
+GROUP BY ?p
+"""
+
+# How far up the containment chain to look for a first-level subdivision. A
+# settlement reaches its state in two or three steps (Portland -> Multnomah
+# County -> Oregon); the cap is what stops a P131 cycle, which Wikidata does
+# contain, from walking forever.
+REGION_DEPTH = 6
+
+
+def point_latlon(point: str) -> tuple[float, float] | None:
+    """(lat, lon) from a WKT `Point(lon lat)` literal — note the order swap."""
+    if not point.startswith("Point("):
+        return None
+    try:
+        lon, lat = point[6:-1].split()
+        return float(lat), float(lon)
+    except ValueError:
+        return None
 
 
 def first(packed: str) -> str:
@@ -196,6 +264,134 @@ def main() -> None:
     if fy.any():
         print(f"    years {int(out.founded_year.min())} to {int(out.founded_year.max())}, "
               f"median {int(out.founded_year.median())}")
+
+    write_places(leads, sorted(admin_qids), labels, out_dir)
+
+
+def write_places(leads: pd.DataFrame, admin_qids: list[str],
+                 labels: dict[str, str], out_dir: Path) -> None:
+    """The settlements a visitor can name, with somewhere to measure a radius from."""
+    settlements = {qid(r["t"]) for r in sparql(SETTLEMENT_SUBCLASSES,
+                                               namespace="wdqs_settlement_subclasses")}
+    print(f"\nplaces: {len(admin_qids):,} administrative areas in the corpus, "
+          f"{len(settlements):,} types in the settlement closure")
+
+    got: dict[str, dict] = {}
+
+    def resolve(qids: list[str]) -> None:
+        """Fill `got` for any of `qids` not already in it."""
+        todo = sorted({q for q in qids if q not in got})
+        for i in range(0, len(todo), CHUNK):
+            chunk = todo[i : i + CHUNK]
+            for r in sparql(ADMIN % " ".join("wd:" + q for q in chunk),
+                            namespace="wdqs_admin", timeout=300):
+                got[qid(r["p"])] = r
+            print(f"  [{i // CHUNK + 1}/{(len(todo) + CHUNK - 1) // CHUNK}] "
+                  f"{len(got):,} areas resolved", flush=True)
+        for q in todo:  # an entity WDQS returned nothing for still counts as tried
+            got.setdefault(q, {})
+
+    resolve(admin_qids)
+
+    # A museum counts towards every area that contains it, not just the one
+    # `admin_label` happens to name — the count orders the typeahead, and a
+    # visitor typing "Paris" means the city whether or not p09 picked it.
+    n_museums: dict[str, int] = {}
+    countries: dict[str, list[str]] = {}
+    for admins, country in zip(leads.admins.fillna(""), leads.country_label.fillna("")):
+        for a in admins.split("|"):
+            if a:
+                n_museums[a] = n_museums.get(a, 0) + 1
+                if country:
+                    countries.setdefault(a, []).append(country)
+
+    def packed(q: str, key: str) -> list[str]:
+        return sorted({v for v in (got.get(q, {}).get(key, "") or "").split("|") if v})
+
+    keep = []
+    no_coord = no_type = 0
+    for q in admin_qids:
+        if not set(packed(q, "types")) & settlements:
+            no_type += 1
+            continue
+        if point_latlon(first(got.get(q, {}).get("coords", ""))) is None:
+            no_coord += 1
+            continue
+        keep.append(q)
+    print(f"  {no_type:,} not settlements, {no_coord:,} settlements without a coordinate")
+
+    region = regions_of(keep, got, resolve)
+    region_labels = fetch_en_labels(sorted(set(region.values())))
+    print(f"  first-level region found for {len(region):,} of {len(keep):,} settlements")
+
+    rows = []
+    for q in keep:
+        latlon = point_latlon(first(got[q]["coords"]))
+        here = countries.get(q, [])
+        name = labels.get(q, q)
+        region_name = region_labels.get(region.get(q, ""), "")
+        rows.append({
+            "qid": q,
+            "name": name,
+            # A place that *is* its own region reads as an error in the list
+            # ("Berlin — Berlin"), so it carries none rather than repeating.
+            "region": "" if region_name == name else region_name,
+            "lat": latlon[0],
+            "lon": latlon[1],
+            # Plurality, ties broken by name so a re-run is byte-identical.
+            "country": max(sorted(set(here)), key=here.count) if here else "",
+            "n_museums": n_museums.get(q, 0),
+        })
+
+    places = pd.DataFrame(rows).sort_values(
+        ["n_museums", "qid"], ascending=[False, True]).reset_index(drop=True)
+    write_parquet(places, out_dir / "places.parquet",
+                  expect_cols=["qid", "name", "region", "lat", "lon", "country", "n_museums"])
+    if len(places):
+        print(f"  most museums: {', '.join(places.name.head(5))}")
+        named = places[places.region != ""]
+        if len(named):
+            print("  e.g. " + "; ".join(f"{r.name} — {r.region}, {r.country}"
+                                        for r in named.head(3).itertuples(index=False)))
+
+
+def regions_of(places: list[str], got: dict[str, dict], resolve) -> dict[str, str]:
+    """place qid -> the first-level subdivision containing it, where there is one.
+
+    Walks P131 upwards a level at a time, resolving each level in bulk, and stops
+    at the first ancestor typed inside the Q10864048 closure. The place's own
+    types are not tested: a city-state is its own subdivision, and answering
+    "Singapore" with "Singapore" tells a visitor nothing.
+
+    A place on a boundary can sit under two subdivisions. The pick is the lowest
+    QID, which is arbitrary but stable — the same rule this stage uses everywhere
+    else it has to choose between equally good values.
+    """
+    first_level = {qid(r["t"]) for r in sparql(SUBDIVISION_SUBCLASSES,
+                                               namespace="wdqs_subdivision_subclasses")}
+    found: dict[str, str] = {}
+    frontier = {p: [p] for p in places}
+
+    for _ in range(REGION_DEPTH):
+        ahead = {}
+        for p, nodes in frontier.items():
+            up = sorted({a for n in nodes
+                         for a in (got.get(n, {}).get("parents", "") or "").split("|") if a})
+            if up:
+                ahead[p] = up
+        if not ahead:
+            break
+        resolve(sorted({n for nodes in ahead.values() for n in nodes}))
+        for p, nodes in ahead.items():
+            for n in nodes:
+                types = {t for t in (got.get(n, {}).get("types", "") or "").split("|") if t}
+                if types & first_level:
+                    found[p] = n
+                    break
+        frontier = {p: nodes for p, nodes in ahead.items() if p not in found}
+        if not frontier:
+            break
+    return found
 
 
 if __name__ == "__main__":

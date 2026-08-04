@@ -27,6 +27,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pipeline.common import ROOT, corpus_paths  # noqa: E402
+from museum_map.nearby import NearbyControl  # noqa: E402
 from museum_map.wiki import language_names  # noqa: E402
 
 TITLE = "Museum Map"
@@ -84,6 +85,15 @@ CAT_OTHER = "other"
 # grey means the eye reads them as "nothing recorded here" instead of ranking
 # them alongside the named values.
 NEUTRAL_GREYS = ("#adadad", "#d6d6d6", "#8a8a8a")
+
+# What goes in the lat/lon point metadata for a museum with no P625. It has to be
+# a real number: datamapplot ships that metadata as JSON built by `json.dumps`,
+# which writes a bare `NaN` for a missing float, and the browser parses it with a
+# strict `JSON.parse` inside a worker. That throws, and the failure mode is not a
+# broken control — it is the whole map loading with no metadata, so no tooltips
+# and no search either. 999 is outside the latitude range, so the nearby control
+# can recognise it, and no arithmetic on it can produce a plausible distance.
+NO_COORD = 999.0
 
 
 def era_of(year) -> str:
@@ -279,6 +289,10 @@ def main() -> None:
         name + " · " + country + " · " + type_label + " · " + admin
     ).str.strip(" ·")
 
+    # lat/lon are here for the nearby control and are never shown on the card.
+    # They ride in the point metadata rather than in the control's own JS because
+    # this payload is gzipped inside the HTML and a second copy would not be.
+    has_coord = leads.lat.notna() & leads.lon.notna()
     extra = pd.DataFrame({
         "name": name,
         "country": country,
@@ -290,7 +304,15 @@ def main() -> None:
         "source_note": footer,
         "region": label_layers[0],
         "search": search_blob,
+        "lat": leads.lat.where(has_coord, NO_COORD).astype(float),
+        "lon": leads.lon.where(has_coord, NO_COORD).astype(float),
     })
+    # See NO_COORD: a null in here reaches the browser as a bare `NaN` and takes
+    # the map's whole metadata payload down with it, quietly and at load time.
+    # Cheaper to fail the build than to debug that from a blank tooltip.
+    nan_cols = [c for c in extra.columns if extra[c].isna().any()]
+    assert not nan_cols, f"nulls in point metadata would break JSON.parse: {nan_cols}"
+    print(f"coordinates: {has_coord.mean():.1%} of museums carry one")
 
     hover_template = (
         "<div style='max-width:22rem'>"
@@ -367,6 +389,32 @@ def main() -> None:
         top = ", ".join(f"{k} {v / len(leads) * 100:.0f}%" for k, v in vc.head(4).items())
         print(f"  {name_:<9} {len(vc):>2} buckets — {top}")
 
+    # ---- the nearby control ----
+    #
+    # Optional in the same way p09's facts are: a corpus that has not been
+    # through p09 still renders, without the control rather than not at all.
+    # It is injected through the `custom_*` parameters rather than as a widget;
+    # museum_map/nearby.py says why, and the reason is not a preference.
+    places_path = out_dir / "places.parquet"
+    custom = {"custom_html": None, "custom_css": None, "custom_js": None}
+    if places_path.exists():
+        places = pd.read_parquet(places_path)
+        # A gazetteer written before regions existed would otherwise fail deep
+        # inside the payload builder, on an attribute rather than on the file.
+        stale = {"qid", "name", "region", "lat", "lon", "country"} - set(places.columns)
+        if stale:
+            raise SystemExit(f"{places_path} is missing {sorted(stale)} — "
+                             "rerun pipeline/p09_facts.py for this corpus")
+        control = NearbyControl(
+            places, no_coord=NO_COORD, missing_share=float(1 - has_coord.mean()),
+        )
+        custom = {"custom_html": control.html, "custom_css": control.css,
+                  "custom_js": control.javascript}
+        print(f"nearby control: {len(places):,} settlements, "
+              f"{', '.join(places.name.head(3))}, …")
+    else:
+        print(f"note: no places ({places_path} missing) — run pipeline/p09_facts.py")
+
     out = Path(args.out) if args.out else ROOT / "reports" / f"map_{args.corpus}{tag}.html"
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -393,6 +441,7 @@ def main() -> None:
         title=TITLE,
         sub_title=SUBTITLE.format(n=len(leads)),
         inline_data=True,
+        **custom,
     )
     plot.save(out)
     print(f"\nwrote {out.relative_to(ROOT)}  ({out.stat().st_size / 1e6:.1f} MB)")

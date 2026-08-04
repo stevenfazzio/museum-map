@@ -53,6 +53,22 @@ WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 # (verified: `ASK { wd:Q19675 wdt:P31 wd:Q33506 }` -> false).
 SUBCLASSES = "SELECT ?t WHERE { ?t wdt:P279* wd:Q33506 }"
 
+# Every subclass of "human settlement", transitively — what counts as a *place a
+# visitor can name* in the map's nearby control. Same transitive form and same
+# reason as above: Wikidata types Rome as `big city`, not as `human settlement`,
+# and each country has its own municipality class (`commune of France`,
+# `city of the United States`), so a hand-written list of city types would be
+# wrong in a different way for every country. The closure is 2,694 types.
+SETTLEMENT_SUBCLASSES = "SELECT ?t WHERE { ?t wdt:P279* wd:Q486972 }"
+
+# Every subclass of "first-level administrative country subdivision" — the state,
+# province or région a settlement sits in. It names a place in the nearby
+# control's list and is matched against, so that typing a region's name reaches
+# the settlements inside it. The tier is not a consistent granularity worldwide:
+# it is states in the US, régions in France, and England/Scotland/Wales in the
+# UK, and a city-state has nothing above it at all.
+SUBDIVISION_SUBCLASSES = "SELECT ?t WHERE { ?t wdt:P279* wd:Q10864048 }"
+
 # ---------------------------------------------------------------- disk cache
 
 
