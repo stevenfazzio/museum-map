@@ -4,6 +4,8 @@ A semantic map of every museum in the world that has a Wikipedia article —
 **54,778 museums in 158 languages**, placed by what their article says about
 them, with regions named at five zoom levels.
 
+**[Open the map](https://stevenfazzio.com/museum-map/)** (9 MB, desktop).
+
 Museums that sit near each other are about similar things, so the map is a way to
 find museums like one you already know, and to see what kinds of museum exist at
 all. Its 1,167 region names are the vocabulary for that: *Sardinian Nuragic
@@ -75,7 +77,25 @@ museums.
 
 Output is a single self-contained `reports/map_<corpus>_<tag>.html` — pan, zoom,
 search, and pick a point to see what it is and open its Wikipedia article. The map
-is `reports/map_full_recovered_short.html`.
+is `reports/map_full_recovered_short.html`, published at
+[stevenfazzio.com/museum-map](https://stevenfazzio.com/museum-map/).
+
+`reports/` is gitignored, so the published copy lives on an orphan `gh-pages`
+branch holding nothing but that file as `index.html`. Building it with plumbing
+keeps the 13 MB blob out of `main`'s history and out of the working tree, and
+replacing the branch rather than committing onto it keeps the site one commit
+deep however many times it is rebuilt:
+
+```bash
+BLOB=$(git hash-object -w reports/map_full_recovered_short.html)
+EMPTY=$(printf '' | git hash-object -w --stdin)
+TREE=$(printf '100644 blob %s\tindex.html\n100644 blob %s\t.nojekyll\n' "$BLOB" "$EMPTY" | git mktree)
+git branch -f gh-pages "$(git commit-tree "$TREE" -m 'Publish the map')"
+git push -f origin gh-pages
+```
+
+`.nojekyll` stops Pages running the file through Jekyll. Pages serves it gzipped
+at 9.3 MB.
 
 **Desktop only for now.** On a phone the point card is unreachable (there is no
 hover, and touch has no tap path) and the palette control and legend are hidden
