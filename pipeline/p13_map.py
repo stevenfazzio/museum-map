@@ -282,7 +282,15 @@ def main() -> None:
     # The website is a domain, not a link: the card is a hover tooltip, so it
     # disappears the moment you move the pointer towards anything in it. As text
     # it still says "this is an operating institution with a web presence".
-    domain = website.str.replace(r"^https?://(www\.)?", "", regex=True).str.split("/").str[0]
+    #
+    # Split on `;` and `,` as well as `/`, because a handful of P856 values pack
+    # two URLs into one string and would otherwise render as
+    # `lareggiadeivolsci.it;https:`. Neither character is legitimate in a host, and
+    # the ones that appear in real paths here are already past the first `/`.
+    domain = (
+        website.str.replace(r"^https?://(www\.)?", "", regex=True)
+        .str.split(r"[/;,]", regex=True).str[0]
+    )
     footer = [
         f"{s} · {html.escape(d)}" if d else s for s, d in zip(source_note, domain)
     ]
