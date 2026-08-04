@@ -272,7 +272,7 @@ def main() -> None:
         for a, y, h in zip(admin, leads.founded_year, heritage)
     ]
     facts_html = [
-        f"<div style='opacity:.7;font-size:.78em;margin-bottom:.35rem'>{html.escape(t)}</div>"
+        f"<div style='opacity:.7;font-size:.78em;margin-bottom:.35em'>{html.escape(t)}</div>"
         if t else ""
         for t in facts_line
     ]
@@ -324,14 +324,24 @@ def main() -> None:
     assert not nan_cols, f"nulls in point metadata would break JSON.parse: {nan_cols}"
     print(f"coordinates: {has_coord.mean():.1%} of museums carry one")
 
+    # This markup is rendered into two containers that size themselves very
+    # differently, so it sets no width of its own. The desktop tooltip is already
+    # capped at 25% of the viewport by datamapplot's tooltip CSS; the touch card
+    # is `width:100%` up to 36em. A width here has to be wrong in one of them —
+    # a `rem` cap in particular strands the text in the left of the card, because
+    # `tap_inspect.js` scales the card by raising its `font-size` (up to 3em) to
+    # compensate for a page laid out at desktop width and scaled down, and `rem`
+    # is the one unit that does not follow it.
+    #
+    # Spacing is in `em` for the same reason: it has to scale with the card.
     hover_template = (
-        "<div style='max-width:22rem'>"
-        "<div style='font-weight:600;margin-bottom:.2rem'>{name}</div>"
-        "<div style='opacity:.75;font-size:.85em;margin-bottom:.4rem'>"
+        "<div>"
+        "<div style='font-weight:600;margin-bottom:.2em'>{name}</div>"
+        "<div style='opacity:.75;font-size:.85em;margin-bottom:.4em'>"
         "{country} · {type} · {lang}.wikipedia</div>"
         "{facts}"
         "<div style='font-size:.85em;line-height:1.35'>{snippet}</div>"
-        "<div style='opacity:.55;font-size:.72em;margin-top:.45rem'>{source_note}</div>"
+        "<div style='opacity:.55;font-size:.72em;margin-top:.45em'>{source_note}</div>"
         "</div>"
     )
 
