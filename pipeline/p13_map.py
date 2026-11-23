@@ -143,6 +143,16 @@ def categorical_buckets(
     return out.tolist(), colors
 
 
+# Plausible analytics: the one site that covers all of stevenfazzio.com. The script
+# ignores localhost and file:// pages, so local previews stay out of the stats.
+PLAUSIBLE_SNIPPET = """<!-- Privacy-friendly analytics by Plausible -->
+<script async src="https://plausible.io/js/pa-dvmKWiL1gpqH63wOvMp-g.js"></script>
+<script>
+  window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+  plausible.init()
+</script>"""
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus", default="fixture")
@@ -476,6 +486,9 @@ def main() -> None:
         **custom,
     )
     plot.save(out)
+    text = out.read_text(encoding="utf-8")
+    assert "</head>" in text, "no </head> in the rendered page"
+    out.write_text(text.replace("</head>", PLAUSIBLE_SNIPPET + "\n</head>", 1), encoding="utf-8")
     print(f"\nwrote {out.relative_to(ROOT)}  ({out.stat().st_size / 1e6:.1f} MB)")
 
 
